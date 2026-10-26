@@ -2093,6 +2093,7 @@ def serve_dashboard():
           <span>🔗 GitHub Actions URL: <a id="ghActionLink" href="#" target="_blank" class="text-indigo-400 hover:underline">Configured Repository Actions</a></span>
           <span id="ghLastRunText" class="font-mono text-slate-500">No runs triggered yet</span>
         </div>
+        <div id="ghWorkerGrid" class="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-2 border-t border-slate-800"></div>
       </div>
 
       <!-- Live Terminal Console -->
@@ -3223,7 +3224,32 @@ def serve_dashboard():
           }
         }
         if (runText && tele.created_at) {
-          runText.innerText = `Latest Run: ${tele.status} (${tele.conclusion || 'running'}) - ${new Date(tele.created_at).toLocaleTimeString()}`;
+          const runUrl = tele.html_url || `https://github.com/${d.repo}/actions`;
+          runText.innerHTML = `<a href="${runUrl}" target="_blank" class="text-cyan-400 hover:underline font-bold"><i class="fa-solid fa-arrow-up-right-from-square"></i> Live Run #${tele.run_id}: ${tele.status.toUpperCase()}</a>`;
+        }
+
+        const grid = document.getElementById('ghWorkerGrid');
+        if (grid && tele.jobs && tele.jobs.length > 0) {
+          let gridHtml = '';
+          tele.jobs.forEach(j => {
+            let stColor = 'text-slate-400 border-slate-700 bg-slate-900';
+            let icon = '<i class="fa-regular fa-clock"></i>';
+            if (j.status === 'in_progress') {
+              stColor = 'text-cyan-300 border-cyan-500/40 bg-cyan-950/40 animate-pulse';
+              icon = '<i class="fa-solid fa-gear fa-spin"></i>';
+            } else if (j.conclusion === 'success') {
+              stColor = 'text-emerald-300 border-emerald-500/40 bg-emerald-950/40';
+              icon = '<i class="fa-solid fa-check"></i>';
+            } else if (j.conclusion === 'failure') {
+              stColor = 'text-rose-300 border-rose-500/40 bg-rose-950/40';
+              icon = '<i class="fa-solid fa-xmark"></i>';
+            }
+            gridHtml += `<div class="p-2 rounded-lg border ${stColor} text-[11px] font-mono flex items-center justify-between">
+              <span class="truncate">${j.name}</span>
+              <span>${icon}</span>
+            </div>`;
+          });
+          grid.innerHTML = gridHtml;
         }
       } catch(e) {}
     }
@@ -3255,6 +3281,7 @@ def serve_dashboard():
         const d = await res.json();
         if (d.success) {
           alert('🚀 ' + d.message);
+          window.open('https://github.com/sagarsbl369369-bit/krishna-divine-cinema/actions', '_blank');
           fetchGitHubStatus();
         } else {
           alert('⚠️ ' + (d.error || 'Failed to dispatch'));

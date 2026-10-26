@@ -58,6 +58,7 @@ class GitHubCloudDispatcher:
             pass
 
     def dispatch_10_video_batch(self, duration: int = 35, privacy: str = "unlisted") -> Dict[str, Any]:
+        self.config = self.load_config()
         repo = self.config.get("github_repo", "").strip()
         token = self.config.get("github_token", "").strip()
         workflow = self.config.get("workflow_name", "master_10_video_pipeline.yml")
@@ -101,6 +102,7 @@ class GitHubCloudDispatcher:
             return {"success": False, "error": str(e)}
 
     def get_latest_run_status(self) -> Dict[str, Any]:
+        self.config = self.load_config()
         repo = self.config.get("github_repo", "").strip()
         token = self.config.get("github_token", "").strip()
         workflow = self.config.get("workflow_name", "master_10_video_pipeline.yml")
@@ -121,14 +123,30 @@ class GitHubCloudDispatcher:
                 runs = data.get("workflow_runs", [])
                 if runs:
                     latest = runs[0]
+                    run_id = latest.get("id")
+
+                    jobs_data = []
+                    try:
+                        r_j = requests.get(f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs", headers=headers, timeout=10)
+                        if r_j.status_code == 200:
+                            for j in r_j.json().get("jobs", []):
+                                jobs_data.append({
+                                    "name": j.get("name"),
+                                    "status": j.get("status"),
+                                    "conclusion": j.get("conclusion")
+                                })
+                    except Exception:
+                        pass
+
                     return {
                         "configured": True,
-                        "run_id": latest.get("id"),
+                        "run_id": run_id,
                         "status": latest.get("status"),       # queued, in_progress, completed
                         "conclusion": latest.get("conclusion"), # success, failure, neutral
                         "html_url": latest.get("html_url"),
                         "created_at": latest.get("created_at"),
-                        "updated_at": latest.get("updated_at")
+                        "updated_at": latest.get("updated_at"),
+                        "jobs": jobs_data
                     }
                 return {"configured": True, "status": "NO_RUNS_YET"}
             return {"configured": True, "status": f"HTTP_{r.status_code}", "error": r.text}
