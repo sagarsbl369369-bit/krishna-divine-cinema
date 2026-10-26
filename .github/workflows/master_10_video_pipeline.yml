@@ -68,6 +68,17 @@ jobs:
         run: |
           python github_worker_node.py --worker_id ${{ matrix.worker_id }} --duration ${{ github.event.inputs.target_duration || '35' }} --privacy ${{ github.event.inputs.privacy || 'unlisted' }}
 
+      - name: 💾 Preserve Rendered Video & SEO Package as Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-worker-${{ matrix.worker_id }}-channel-${{ matrix.worker_id <= 5 && '1' || '2' }}
+          path: |
+            renders/*.mp4
+            renders/*.png
+            renders/*upload_manifest.json
+          retention-days: 7
+
       - name: 🛑 Graceful Container Shutdown
         if: always()
         run: |

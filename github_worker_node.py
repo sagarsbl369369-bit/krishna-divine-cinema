@@ -106,6 +106,8 @@ def setup_cloud_environment(worker_id: int, channel_id: str):
             cs_json = json.loads(cs_data)
             with open(os.path.join(CREDENTIALS_DIR, f"client_secret_{channel_id}.json"), "w", encoding="utf-8") as f:
                 json.dump(cs_json, f, indent=2)
+            with open(os.path.join(CREDENTIALS_DIR, "client_secret.json"), "w", encoding="utf-8") as f:
+                json.dump(cs_json, f, indent=2)
             print(f"✓ Configured OAuth Client Secret for {channel_id}")
         except Exception as e:
             print(f"⚠️ Error saving client secret for {channel_id}: {e}")
@@ -114,6 +116,8 @@ def setup_cloud_environment(worker_id: int, channel_id: str):
         try:
             tk_json = json.loads(tk_data)
             with open(os.path.join(CREDENTIALS_DIR, f"token_{channel_id}.json"), "w", encoding="utf-8") as f:
+                json.dump(tk_json, f, indent=2)
+            with open(os.path.join(CREDENTIALS_DIR, f"{channel_id}_token.json"), "w", encoding="utf-8") as f:
                 json.dump(tk_json, f, indent=2)
             print(f"✓ Configured OAuth Token for {channel_id}")
         except Exception as e:
