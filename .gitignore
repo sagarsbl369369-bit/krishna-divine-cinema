@@ -1,0 +1,35 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Video renders & intermediate rendering artifacts
+renders/
+*.mp4
+*.mkv
+*.avi
+*.pcm
+*.wav
+*.ts
+*.webm
+*.srt
+*.ass
+
+# Local runtime logs & state
+*.log
+*.jsonl
+
+# Local sensitive credentials & secrets (NEVER COMMIT)
+credentials/
+config.json
+channels.json
+chrome_dbg/
+used_visual_ids.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini

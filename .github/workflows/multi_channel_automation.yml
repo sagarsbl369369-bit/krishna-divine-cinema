@@ -1,0 +1,54 @@
+name: 24x7 Gita Multi-Channel Production & Upload
+
+on:
+  schedule:
+    # Runs automatically every day at 05:00 AM IST (23:30 UTC)
+    - cron: '30 23 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  generate-and-upload:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 20 Parallel Instances running concurrently for 100% FREE on GitHub Actions
+        channel: [
+          ch_01, ch_02, ch_03, ch_04, ch_05,
+          ch_06, ch_07, ch_08, ch_09, ch_10,
+          ch_11, ch_12, ch_13, ch_14, ch_15,
+          ch_16, ch_17, ch_18, ch_19, ch_20
+        ]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install System Dependencies (FFmpeg & Pure Hindi Devanagari Fonts)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-core fonts-deva
+
+      - name: Install Python Packages
+        run: |
+          pip install google-genai requests google-api-python-client google-auth-oauthlib
+
+      - name: Generate Supreme Devotional 16:9 Video for ${{ matrix.channel }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          CHANNEL_ID: ${{ matrix.channel }}
+        run: |
+          python supreme_devotional_engine.py
+
+      - name: Auto-Upload to YouTube Channel (${{ matrix.channel }})
+        env:
+          CHANNEL_ID: ${{ matrix.channel }}
+        run: |
+          python uploader.py --channel ${{ matrix.channel }} --video renders/supreme_devotional_16_9_master.mp4
