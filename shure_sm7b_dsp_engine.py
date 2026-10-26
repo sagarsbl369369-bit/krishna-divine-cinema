@@ -103,15 +103,28 @@ def synthesize_shure_sm7b_audio(plain_hindi_text: str, output_path: str) -> floa
     """
     raw_mp3 = output_path.replace(".mp3", "_raw.mp3")
 
-    cmd_tts = [
-        sys.executable, "-m", "edge_tts",
-        "--voice", VOICE_NAME,
-        "--rate", VOICE_RATE,
-        "--pitch", VOICE_PITCH,
-        "--text", plain_hindi_text.strip(),
-        "--write-media", raw_mp3
-    ]
-    subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    tts_ok = False
+    try:
+        import asyncio, edge_tts
+        async def _synth_direct():
+            comm = edge_tts.Communicate(plain_hindi_text.strip(), VOICE_NAME, rate=VOICE_RATE, pitch=VOICE_PITCH)
+            await comm.save(raw_mp3)
+        asyncio.run(_synth_direct())
+        if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+            tts_ok = True
+    except Exception as e_direct:
+        pass
+
+    if not tts_ok:
+        cmd_tts = [
+            sys.executable, "-m", "edge_tts",
+            "--voice", VOICE_NAME,
+            "--rate", VOICE_RATE,
+            "--pitch", VOICE_PITCH,
+            "--text", plain_hindi_text.strip(),
+            "--write-media", raw_mp3
+        ]
+        subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # Master with Studio Shure SM7B DSP Hardware Chain
     cmd = [

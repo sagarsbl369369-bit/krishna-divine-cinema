@@ -166,15 +166,28 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
     if use_fallback or not chunk_files:
         print("   [🔄] Executing Edge-TTS (hi-IN-MadhurNeural) with Studio Shure SM7B DSP...")
         raw_mp3 = audio_path.replace(".mp3", "_raw.mp3")
-        cmd_tts = [
-            sys.executable, "-m", "edge_tts",
-            "--voice", "hi-IN-MadhurNeural",
-            "--rate", "+0%",
-            "--pitch", "-2Hz",
-            "--text", clean_text,
-            "--write-media", raw_mp3
-        ]
-        subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        tts_ok = False
+        try:
+            import asyncio, edge_tts
+            async def _synth_direct():
+                comm = edge_tts.Communicate(clean_text, "hi-IN-MadhurNeural", rate="+0%", pitch="-2Hz")
+                await comm.save(raw_mp3)
+            asyncio.run(_synth_direct())
+            if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+                tts_ok = True
+        except Exception as e_direct:
+            print(f"      [!] Python edge_tts direct failed: {e_direct}, attempting CLI fallback...")
+
+        if not tts_ok:
+            cmd_tts = [
+                sys.executable, "-m", "edge_tts",
+                "--voice", "hi-IN-MadhurNeural",
+                "--rate", "+0%",
+                "--pitch", "-2Hz",
+                "--text", clean_text,
+                "--write-media", raw_mp3
+            ]
+            subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         unmastered_audio = raw_mp3
     else:
         # Concatenate all rendered Gemini TTS chunks
