@@ -1076,6 +1076,31 @@ def serve_dashboard():
     <!-- TAB 1: PRODUCTION MISSION CONTROL -->
     <!-- ============================================================== -->
     <div id="content-control" class="tab-pane active space-y-6" style="display: block;">
+      
+      <!-- Cloud Matrix Live Top Banner -->
+      <div class="p-4 rounded-2xl bg-gradient-to-r from-indigo-950/80 via-purple-950/60 to-slate-900 border border-indigo-500/50 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl">
+        <div class="flex items-center gap-3">
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+          </span>
+          <div>
+            <h4 class="font-bold text-slate-100 text-sm flex items-center gap-2">
+              <i class="fa-brands fa-github text-white"></i> 10-Worker Cloud Parallel Beast (GitHub Actions)
+            </h4>
+            <p class="text-xs text-slate-300">10 Videos (&gt;30 Mins Each, 5 Ch1 + 5 Ch2) run in parallel in the cloud with zero PC load!</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="switchTab('colab')" class="px-3.5 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition cursor-pointer">
+            <i class="fa-solid fa-microchip"></i> Open 10-Worker Matrix
+          </button>
+          <a href="https://github.com/sagarsbl369369-bit/krishna-divine-cinema/actions" target="_blank" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg transition cursor-pointer">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Watch Live on GitHub
+          </a>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         <!-- Left: Launch Controls -->
@@ -3229,24 +3254,40 @@ def serve_dashboard():
         }
 
         const grid = document.getElementById('ghWorkerGrid');
-        if (grid && tele.jobs && tele.jobs.length > 0) {
+        if (grid) {
+          const jobs = (tele.jobs && tele.jobs.length > 0) ? tele.jobs : [
+            {name: 'Worker 1 (Channel 1)', status: tele.status || 'queued'},
+            {name: 'Worker 2 (Channel 1)', status: tele.status || 'queued'},
+            {name: 'Worker 3 (Channel 1)', status: tele.status || 'queued'},
+            {name: 'Worker 4 (Channel 1)', status: tele.status || 'queued'},
+            {name: 'Worker 5 (Channel 1)', status: tele.status || 'queued'},
+            {name: 'Worker 6 (Channel 2)', status: tele.status || 'queued'},
+            {name: 'Worker 7 (Channel 2)', status: tele.status || 'queued'},
+            {name: 'Worker 8 (Channel 2)', status: tele.status || 'queued'},
+            {name: 'Worker 9 (Channel 2)', status: tele.status || 'queued'},
+            {name: 'Worker 10 (Channel 2)', status: tele.status || 'queued'}
+          ];
           let gridHtml = '';
-          tele.jobs.forEach(j => {
+          jobs.forEach(j => {
             let stColor = 'text-slate-400 border-slate-700 bg-slate-900';
             let icon = '<i class="fa-regular fa-clock"></i>';
+            let label = (j.status || 'STANDBY').toUpperCase();
             if (j.status === 'in_progress') {
-              stColor = 'text-cyan-300 border-cyan-500/40 bg-cyan-950/40 animate-pulse';
-              icon = '<i class="fa-solid fa-gear fa-spin"></i>';
+              stColor = 'text-cyan-300 border-cyan-500/50 bg-cyan-950/60 shadow-lg shadow-cyan-500/10 animate-pulse';
+              icon = '<i class="fa-solid fa-gear fa-spin text-cyan-400"></i>';
+              label = 'RUNNING';
             } else if (j.conclusion === 'success') {
-              stColor = 'text-emerald-300 border-emerald-500/40 bg-emerald-950/40';
-              icon = '<i class="fa-solid fa-check"></i>';
+              stColor = 'text-emerald-300 border-emerald-500/50 bg-emerald-950/60';
+              icon = '<i class="fa-solid fa-check text-emerald-400"></i>';
+              label = 'DONE';
             } else if (j.conclusion === 'failure') {
-              stColor = 'text-rose-300 border-rose-500/40 bg-rose-950/40';
-              icon = '<i class="fa-solid fa-xmark"></i>';
+              stColor = 'text-rose-300 border-rose-500/50 bg-rose-950/60';
+              icon = '<i class="fa-solid fa-xmark text-rose-400"></i>';
+              label = 'FAILED';
             }
-            gridHtml += `<div class="p-2 rounded-lg border ${stColor} text-[11px] font-mono flex items-center justify-between">
-              <span class="truncate">${j.name}</span>
-              <span>${icon}</span>
+            gridHtml += `<div class="p-2.5 rounded-xl border ${stColor} text-[11px] font-mono flex items-center justify-between transition-all">
+              <span class="truncate font-semibold">${j.name}</span>
+              <span class="flex items-center gap-1 font-bold text-[10px]">${icon} ${label}</span>
             </div>`;
           });
           grid.innerHTML = gridHtml;
@@ -3271,7 +3312,19 @@ def serve_dashboard():
     }
 
     async function dispatchGitHubCloudRun() {
-      if (!confirm('🚀 क्या आप GitHub Actions क्लाउड पर 10 समानांतर Linux VMs चालू करके 10 वीडियो (>30 मिनट, 5 Ch1 + 5 Ch2) का 1-क्लिक बैच शुरू करना चाहते हैं?\nसभी 10 वीडियो पूरी तरह UNLISTED अपलोड होंगे और काम खत्म होते ही सभी VMs स्वतः बंद हो जाएँगी।')) return;
+      const btn = document.getElementById('ghDispatchBtn');
+      const oldHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.className = 'px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-amber-500/25 transition-all whitespace-nowrap animate-pulse';
+        btn.innerHTML = '<i class="fa-solid fa-gear fa-spin text-sm"></i> ⚡ DISPATCHING TO 10 CLOUD VMS...';
+      }
+
+      const runText = document.getElementById('ghLastRunText');
+      if (runText) {
+        runText.innerHTML = '<span class="text-amber-300 font-bold animate-pulse">⚡ Sending dispatch signal to GitHub Cloud...</span>';
+      }
+
       try {
         const res = await fetch('/api/github/dispatch', {
           method: 'POST',
@@ -3280,13 +3333,35 @@ def serve_dashboard():
         });
         const d = await res.json();
         if (d.success) {
-          alert('🚀 ' + d.message);
-          window.open('https://github.com/sagarsbl369369-bit/krishna-divine-cinema/actions', '_blank');
+          if (runText) {
+            runText.innerHTML = '<span class="text-emerald-400 font-bold">✅ 10 CLOUD WORKERS LAUNCHED! Refreshing status...</span>';
+          }
+          if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-check text-emerald-300"></i> ✅ DISPATCHED SUCCESSFULLY!';
+            btn.className = 'px-5 py-3 rounded-xl bg-emerald-600/30 border border-emerald-500 text-emerald-300 font-black text-xs flex items-center gap-2';
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.className = 'px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-95';
+              btn.innerHTML = '<i class="fa-solid fa-rocket"></i> 🚀 DISPATCH 10 PARALLEL CLOUD WORKERS';
+            }, 6000);
+          }
           fetchGitHubStatus();
+          setTimeout(fetchGitHubStatus, 1500);
+          setTimeout(fetchGitHubStatus, 3500);
         } else {
           alert('⚠️ ' + (d.error || 'Failed to dispatch'));
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = oldHtml;
+          }
         }
-      } catch(e) { alert('Error: ' + e); }
+      } catch(e) {
+        alert('Error: ' + e);
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = oldHtml;
+        }
+      }
     }
 
     // Initialize
