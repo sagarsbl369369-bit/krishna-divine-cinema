@@ -435,10 +435,14 @@ def main():
     print("==================================================================")
 
     # Append Content ID Outro (173.25s = 2.89 minutes)
-    content_id_outro = os.path.join(CHAPTERS_DIR, "norm_content_id_outro.mp4")
-    if os.path.exists(content_id_outro) and os.path.getsize(content_id_outro) > 10000:
+    outro_candidates = [
+        os.path.join(BASE_DIR, "assets", "outro", "norm_content_id_outro.mp4"),
+        os.path.join(CHAPTERS_DIR, "norm_content_id_outro.mp4")
+    ]
+    content_id_outro = next((p for p in outro_candidates if os.path.exists(p) and os.path.getsize(p) > 10000), None)
+    if content_id_outro:
         chapter_video_files.append(content_id_outro)
-        print(f"🔒 Appended Content ID Outro Clip (173.25s) for Guaranteed > 30 Min Runtime!")
+        print(f"🔒 Appended Content ID Outro Clip (173.25s) from {content_id_outro} for Guaranteed > 30 Min Runtime!")
 
     master_manifest = os.path.join(RENDERS_DIR, "master_chapters_manifest.txt")
     with open(master_manifest, "w", encoding="utf-8") as f:

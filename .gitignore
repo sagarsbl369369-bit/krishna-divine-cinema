@@ -9,6 +9,7 @@ env/
 # Video renders & intermediate rendering artifacts
 renders/
 *.mp4
+!assets/outro/norm_content_id_outro.mp4
 *.mkv
 *.avi
 *.pcm
