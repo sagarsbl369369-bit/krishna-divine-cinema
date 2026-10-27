@@ -65,3 +65,14 @@ jobs:
           CH_PROFILE_DIR_CH02: /tmp/chrome_user_data_ch02
         run: |
           xvfb-run -a -s "-screen 0 1920x1080x24" python cloud_batch_uploader.py ${{ github.event.inputs.run_id || '40514508384' }}
+
+      - name: 📸 Preserve Diagnostic Screenshots & Upload Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uploader-diagnostics
+          path: |
+            renders/*.png
+            renders/debug_*.png
+            renders/*upload_manifest.json
+          if-no-files-found: ignore

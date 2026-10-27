@@ -39,10 +39,27 @@ SESSION_STATUS_FILE = os.path.join(CREDENTIALS_DIR, "youtube_session_status.json
 os.makedirs(BROWSER_PROFILE_DIR, exist_ok=True)
 
 def get_channel_profile_dir(channel_id: str = "ch_01") -> str:
-    # Priority 1: Cloud unpack directory if set
-    env_prof = os.getenv("CH_PROFILE_DIR")
-    if env_prof and os.path.exists(env_prof) and os.listdir(env_prof):
-        return env_prof
+    # Priority 1: Channel-specific environment variable
+    env_var = "CH_PROFILE_DIR_CH01" if channel_id == "ch_01" else "CH_PROFILE_DIR_CH02"
+    ch_env = os.getenv(env_var)
+    if ch_env and os.path.exists(ch_env) and any(os.scandir(ch_env)):
+        return ch_env
+
+    # Priority 2: Generic CH_PROFILE_DIR
+    gen_prof = os.getenv("CH_PROFILE_DIR")
+    if gen_prof and os.path.exists(gen_prof) and any(os.scandir(gen_prof)):
+        return gen_prof
+
+    # Priority 3: CI runner temp path conventions
+    ci_path = "/tmp/chrome_user_data_ch01" if channel_id == "ch_01" else "/tmp/chrome_user_data_ch02"
+    if os.path.exists(ci_path) and any(os.scandir(ci_path)):
+        return ci_path
+
+    ci_gen = "/tmp/chrome_user_data"
+    if os.path.exists(ci_gen) and any(os.scandir(ci_gen)):
+        return ci_gen
+
+    # Priority 4: Local workspace credentials directory
     if channel_id == "ch_02":
         return os.path.join(CREDENTIALS_DIR, "youtube_browser_profile_ch_02")
     return os.path.join(CREDENTIALS_DIR, "youtube_browser_profile")
@@ -167,10 +184,11 @@ class YouTubeHumanUploader:
         if page is not None:
             return self._check_page_logged_in(page)
         
-        # Standalone headless check
+        # Standalone check
         try:
             with sync_playwright() as p:
-                context = self._launch_context(p, headless=True)
+                use_headless = False if ("DISPLAY" in os.environ or sys.platform == "win32") else True
+                context = self._launch_context(p, headless=use_headless)
                 p_check = context.new_page()
                 result = self._check_page_logged_in(p_check)
                 context.close()
@@ -182,7 +200,7 @@ class YouTubeHumanUploader:
     def _check_page_logged_in(self, page: Page) -> bool:
         real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if self.channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
         try:
-            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", wait_until="domcontentloaded", timeout=45000)
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}/videos", wait_until="domcontentloaded", timeout=45000)
             for _ in range(8):
                 time.sleep(2)
                 current_url = page.url
@@ -326,7 +344,8 @@ class YouTubeHumanUploader:
         thumbnail_path: Optional[str] = None,
         channel_id: str = "ch_01",
         privacy: str = "unlisted",
-        headless: bool = False
+        headless: bool = False,
+        profile_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Automates YouTube Studio upload with human-mimicry precision for specified channel.
@@ -335,7 +354,10 @@ class YouTubeHumanUploader:
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
         self.channel_id = channel_id
-        self.profile_dir = get_channel_profile_dir(channel_id)
+        if profile_dir:
+            self.profile_dir = profile_dir
+        elif not self.profile_dir or not os.path.exists(self.profile_dir):
+            self.profile_dir = get_channel_profile_dir(channel_id)
         os.makedirs(self.profile_dir, exist_ok=True)
 
         print("\n" + "=" * 70)
@@ -351,10 +373,10 @@ class YouTubeHumanUploader:
             context = self._launch_context(p, headless=headless)
             page = context.new_page()
 
-            # 1. Navigate to YouTube Studio for the exact channel
+            # 1. Navigate to YouTube Studio videos page for the exact channel
             real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
-            print(f"[1/7] Navigating to studio.youtube.com/channel/{real_ch_id}...", flush=True)
-            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", wait_until="domcontentloaded", timeout=60000)
+            print(f"[1/7] Navigating to studio.youtube.com/channel/{real_ch_id}/videos...", flush=True)
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}/videos", wait_until="domcontentloaded", timeout=60000)
             time.sleep(3)
 
             # Check if login or account chooser is needed
@@ -439,20 +461,44 @@ class YouTubeHumanUploader:
             # 3. Select Video File
             print(f"[3/7] Selecting Video File ({os.path.basename(video_path)})...", flush=True)
             file_input = page.locator("input[type='file']").first
+            attached = False
+
             try:
-                file_input.wait_for(state="attached", timeout=15000)
+                file_input.wait_for(state="attached", timeout=20000)
                 file_input.set_input_files(video_path)
+                attached = True
+                print("   ✓ Video file attached successfully via input[type=file]!")
             except Exception as e_fi:
-                print(f"   ⚠️ Direct input[type=file] fallback ({e_fi}). Triggering select files button...")
-                # Trigger file chooser via select files button
-                with page.expect_file_chooser(timeout=20000) as fc_info:
+                print(f"   ⚠️ Direct input[type=file] attachment failed: {e_fi}")
+
+            if not attached:
+                print("   -> Attempting fallback via Select Files button...")
+                try:
                     sel_btn = page.locator("#select-files-button, ytcp-button:has-text('Select files'), [aria-label*='Select files' i]").first
-                    self._safe_click(page, sel_btn)
-                file_chooser = fc_info.value
-                file_chooser.set_files(video_path)
+                    if sel_btn.count() > 0 and sel_btn.is_visible():
+                        try:
+                            with page.expect_file_chooser(timeout=15000) as fc_info:
+                                self._safe_click(page, sel_btn)
+                            fc = fc_info.value
+                            fc.set_files(video_path)
+                            attached = True
+                            print("   ✓ Video file attached via file chooser fallback!")
+                        except Exception as e_fc:
+                            print(f"   ⚠️ File chooser exception: {e_fc}")
+                except Exception as e_btn:
+                    print(f"   ⚠️ Select files button error: {e_btn}")
+
+            if not attached:
+                debug_img = os.path.join(RENDERS_DIR, "debug_upload_failure.png")
+                try:
+                    page.screenshot(path=debug_img)
+                    print(f"   📸 Debug screenshot saved to {debug_img}")
+                except Exception:
+                    pass
+                raise RuntimeError(f"Unable to attach video file {os.path.basename(video_path)} to YouTube Studio. Current URL: " + page.url)
 
             print("   [⏳] Waiting for YouTube Studio upload dialog to initialize...")
-            page.wait_for_selector("#title-textarea, #textbox[aria-label*='title' i]", timeout=60000)
+            page.wait_for_selector("#title-textarea, #textbox[aria-label*='title' i]", timeout=90000)
             time.sleep(4)
 
             # 4. Fill Title & Description

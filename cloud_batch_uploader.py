@@ -129,17 +129,22 @@ def run_cloud_batch(github_token: str = None, run_id: str = "40484694835"):
 
                         print(f"   🚀 Uploading {os.path.basename(v_file)} to {ch_name} as UNLISTED...")
                         p_dir = os.getenv("CH_PROFILE_DIR_CH01") if target_ch == "ch_01" else os.getenv("CH_PROFILE_DIR_CH02")
-                        uploader = YouTubeHumanUploader(channel_id=target_ch, profile_dir=p_dir)
-                        res = uploader.upload_video(
-                            video_path=v_file,
-                            seo_package=seo_data,
-                            thumbnail_path=t_file,
-                            channel_id=target_ch,
-                            privacy="unlisted",
-                            headless=False
-                        )
-                        print(f"   🎉 Upload Result: {res.get('video_url', 'Success')}")
-                        time.sleep(10)
+                        try:
+                            uploader = YouTubeHumanUploader(channel_id=target_ch, profile_dir=p_dir)
+                            res = uploader.upload_video(
+                                video_path=v_file,
+                                seo_package=seo_data,
+                                thumbnail_path=t_file,
+                                channel_id=target_ch,
+                                privacy="unlisted",
+                                headless=False,
+                                profile_dir=p_dir
+                            )
+                            print(f"   🎉 Upload Result: {res.get('video_url', 'Success')}")
+                            time.sleep(10)
+                        except Exception as e_upload:
+                            print(f"   ❌ Upload error for {art_name}: {e_upload}")
+                            time.sleep(5)
                 else:
                     print(f"   ⚠️ Could not download artifact {art_name}: HTTP {r_dl.status_code}")
 
