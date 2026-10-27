@@ -24,12 +24,10 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: 🎬 Install FFmpeg, Xvfb & Indian Devanagari Fonts
-        env:
-          DEBIAN_FRONTEND: noninteractive
+      - name: 🎬 Verify Runner Media & Display Tools
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends xvfb ffmpeg fonts-noto-hinted fonts-deva
+          which ffmpeg || sudo apt-get install -y ffmpeg
+          which xvfb-run || sudo apt-get install -y xvfb
 
       - name: 📦 Install Python Dependencies
         run: |
