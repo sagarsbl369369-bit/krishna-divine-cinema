@@ -178,9 +178,18 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
             temp_seg_dir = os.path.join(TEMP_DIR, f"stitch_{int(time.time()*1000)}")
             os.makedirs(temp_seg_dir, exist_ok=True)
 
-            async def _synth_sentence(s_text, s_path):
-                comm = edge_tts.Communicate(s_text, "hi-IN-MadhurNeural", rate="-7%", pitch="-4Hz")
-                await comm.save(s_path)
+            async def _synth_sentence_with_retry(s_text, s_path, max_attempts=3):
+                for att in range(max_attempts):
+                    try:
+                        comm = edge_tts.Communicate(s_text, "hi-IN-MadhurNeural", rate="-7%", pitch="-4Hz")
+                        await comm.save(s_path)
+                        if os.path.exists(s_path) and os.path.getsize(s_path) > 300:
+                            return True
+                    except Exception as err:
+                        if att == max_attempts - 1:
+                            raise err
+                        await asyncio.sleep(1.5 * (att + 1))
+                return False
 
             seg_idx = 0
             for i in range(0, len(raw_sents), 2):
@@ -191,7 +200,7 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
                 full_sent = f"{s}{delim}"
                 pause_ms = 1100 if "?" in delim else 750
                 s_file = os.path.join(temp_seg_dir, f"s_{seg_idx:03d}.mp3")
-                asyncio.run(_synth_sentence(full_sent, s_file))
+                asyncio.run(_synth_sentence_with_retry(full_sent, s_file))
                 if os.path.exists(s_file):
                     seg_aud = AudioSegment.from_file(s_file)
                     stitched_audio += seg_aud + AudioSegment.silent(duration=pause_ms)
@@ -206,18 +215,39 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
             if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
                 tts_ok = True
         except Exception as e_direct:
-            print(f"      [!] Python sentence-stitched fallback error: {e_direct}, attempting single call...")
+            print(f"      [!] Python sentence-stitched fallback error: {e_direct}, attempting file-based CLI call...")
+            temp_txt_path = os.path.join(TEMP_DIR, f"edge_in_{int(time.time()*1000)}.txt")
+            with open(temp_txt_path, "w", encoding="utf-8") as f_txt:
+                f_txt.write(clean_text)
+            
             cmd_tts = [
                 sys.executable, "-m", "edge_tts",
                 "--voice", "hi-IN-MadhurNeural",
                 "--rate", "-7%",
                 "--pitch", "-4Hz",
-                "--text", clean_text,
+                "-f", temp_txt_path,
                 "--write-media", raw_mp3
             ]
-            subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
-                tts_ok = True
+            for attempt in range(3):
+                try:
+                    subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+                        tts_ok = True
+                        break
+                except Exception:
+                    time.sleep(2.0)
+            
+            if os.path.exists(temp_txt_path):
+                try: os.remove(temp_txt_path)
+                except Exception: pass
+            
+            if not tts_ok:
+                print("      [!] Edge-TTS unavailable, failing over to gTTS with Shure SM7B DSP...")
+                from gtts import gTTS
+                tts = gTTS(text=clean_text, lang='hi', slow=False)
+                tts.save(raw_mp3)
+                if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+                    tts_ok = True
         unmastered_audio = raw_mp3
     else:
         # Concatenate all rendered Gemini TTS chunks
