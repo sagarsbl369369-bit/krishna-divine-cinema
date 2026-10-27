@@ -64,7 +64,8 @@ jobs:
 
       - name: 🌐 Install Playwright & Real Google Chrome
         run: |
-          playwright install chrome --with-deps || playwright install chromium --with-deps
+          playwright install chromium --with-deps
+          playwright install chrome --with-deps || true
 
       - name: 🔐 Decrypt & Unpack Authenticated Channel Profile
         env:

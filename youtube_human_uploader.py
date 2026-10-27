@@ -81,30 +81,42 @@ class YouTubeHumanUploader:
             "--start-maximized"
         ]
 
+        # Detect system Google Chrome executable
+        exec_candidates = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+        ]
+        system_chrome = next((c for c in exec_candidates if os.path.exists(c)), None)
+
         # 1. Prefer Persistent Profile Directory if populated (Ultra-reliable Chrome Session)
         has_profile_data = os.path.exists(self.profile_dir) and any(os.scandir(self.profile_dir))
         if has_profile_data:
             print(f"[*] Authenticating with Persistent Chrome Profile: {self.profile_dir}")
+            launch_kwargs = {
+                "user_data_dir": self.profile_dir,
+                "headless": headless,
+                "args": launch_args,
+                "viewport": {"width": 1920, "height": 1080}
+            }
+            if system_chrome:
+                launch_kwargs["executable_path"] = system_chrome
+                print(f"   ✓ Using authentic Google Chrome binary: {system_chrome}")
+            else:
+                launch_kwargs["channel"] = "chrome"
+
             try:
-                ctx = p.chromium.launch_persistent_context(
-                    user_data_dir=self.profile_dir,
-                    headless=headless,
-                    channel="chrome",
-                    args=launch_args,
-                    viewport={"width": 1920, "height": 1080}
-                )
+                ctx = p.chromium.launch_persistent_context(**launch_kwargs)
                 self._inject_stealth(ctx)
                 return ctx
             except Exception as e_prof:
-                print(f"[ℹ️] Chrome channel fallback ({e_prof}). Launching Chromium context...")
+                print(f"[ℹ️] Chrome persistent launch fallback ({e_prof}). Retrying with base Chromium...")
                 self.clean_stale_locks()
+                launch_kwargs.pop("executable_path", None)
+                launch_kwargs.pop("channel", None)
                 try:
-                    ctx = p.chromium.launch_persistent_context(
-                        user_data_dir=self.profile_dir,
-                        headless=headless,
-                        args=launch_args,
-                        viewport={"width": 1920, "height": 1080}
-                    )
+                    ctx = p.chromium.launch_persistent_context(**launch_kwargs)
                     self._inject_stealth(ctx)
                     return ctx
                 except Exception as e_fallback:
