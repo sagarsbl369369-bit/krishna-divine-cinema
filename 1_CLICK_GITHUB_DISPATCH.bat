@@ -15,6 +15,7 @@ echo   🛑 Auto-Shutdown: Automatically cleans up and shuts down all runners
 echo ===============================================================================
 echo.
 
+cd /d "C:\Users\janar\.gemini\antigravity\scratch\geeta_automation_engine"
 python github_cloud_dispatcher.py
 
 echo.

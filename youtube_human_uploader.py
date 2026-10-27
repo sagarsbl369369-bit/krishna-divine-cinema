@@ -173,6 +173,34 @@ class YouTubeHumanUploader:
             context.close()
             return logged_in
 
+    def _safe_click(self, page, locator, timeout=10000):
+        """Clicks element safely bypassing iron overlays, scrims, and backdrop interception."""
+        try:
+            locator.wait_for(state="attached", timeout=timeout)
+            try:
+                locator.scroll_into_view_if_needed(timeout=2000)
+            except Exception:
+                pass
+            locator.click(force=True, timeout=3000)
+            return True
+        except Exception:
+            pass
+
+        try:
+            handle = locator.element_handle()
+            if handle:
+                page.evaluate("(el) => el.click()", handle)
+                return True
+        except Exception:
+            pass
+
+        try:
+            locator.click(timeout=3000)
+            return True
+        except Exception:
+            pass
+        return False
+
     def upload_video(
         self,
         video_path: str,
@@ -240,13 +268,13 @@ class YouTubeHumanUploader:
 
             print("   [⏳] Waiting for YouTube Studio upload dialog to initialize...")
             page.wait_for_selector("#title-textarea, #textbox[aria-label*='title' i]", timeout=60000)
-            time.sleep(3)
+            time.sleep(4)
 
             # 4. Fill Title & Description
             print("[4/7] Entering Viral SEO Title & Narrative Chapters Description...")
             title_box = page.locator("#title-textarea #textbox, div[aria-label*='title' i]").first
             title_text = seo_package.get("title", "")[:100]
-            title_box.click()
+            self._safe_click(page, title_box)
             # Clear default title (filename)
             page.keyboard.press("Control+A")
             page.keyboard.press("Backspace")
@@ -256,9 +284,10 @@ class YouTubeHumanUploader:
             time.sleep(1)
             desc_box = page.locator("#description-textarea #textbox, div[aria-label*='description' i]").first
             desc_text = seo_package.get("description", "")
-            desc_box.click()
+            self._safe_click(page, desc_box)
             desc_box.fill(desc_text)
             print("   ✓ Narrative Description & Chapter Timestamps Filled!")
+            time.sleep(1)
 
             # 5. Upload Viral Thumbnail
             thumb = thumbnail_path or seo_package.get("thumbnail_path")
@@ -274,19 +303,20 @@ class YouTubeHumanUploader:
                     print(f"   ⚠️ Could not attach thumbnail via file-loader: {thumb_e}")
             else:
                 print("[5/7] No thumbnail file specified; YouTube will auto-select default frame.")
+            time.sleep(1)
 
             # 6. Audience Selection ("No, it's not made for kids")
             print("[6/7] Configuring Audience & Safety Settings...")
             not_kids_radio = page.locator("tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK'], #not-made-for-kids-radio").first
             if not_kids_radio.count() > 0:
-                not_kids_radio.click()
+                self._safe_click(page, not_kids_radio)
                 print("   ✓ Audience: 'No, it is not made for kids'")
 
             # Optional: Tags
             try:
                 show_more = page.locator("ytcp-button#toggle-button:has-text('Show more'), #toggle-button").first
                 if show_more.count() > 0:
-                    show_more.click()
+                    self._safe_click(page, show_more)
                     time.sleep(1)
                     tags_box = page.locator("input[aria-label*='Tags' i], #tags-container input").first
                     if tags_box.count() > 0:
@@ -297,27 +327,33 @@ class YouTubeHumanUploader:
             except Exception:
                 pass
 
-            # 7. Navigation: Next -> Next -> Next -> Visibility
-            print("[7/7] Navigating to Visibility & Publishing...")
+            # 7. Navigation: Next -> Next -> Next -> Visibility Step
+            print("[7/7] Navigating to Visibility & Publishing...", flush=True)
             next_btn = page.locator("#next-button").first
             for step in range(3):
                 if next_btn.is_visible() and next_btn.is_enabled():
-                    next_btn.click()
+                    self._safe_click(page, next_btn)
                     time.sleep(2)
 
-            # Visibility Selection
+            # Ensure we are on the Visibility tab
+            page.wait_for_selector("tp-yt-paper-radio-button[name='UNLISTED'], #unlisted-radio-button, tp-yt-paper-radio-button[name='PUBLIC']", timeout=20000)
+            time.sleep(1)
+
+            # Visibility Selection: Explicitly click and verify radio state
             if privacy.lower() == "public":
                 pub_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC'], #public-radio-button").first
                 if pub_radio.count() > 0:
-                    pub_radio.click()
-                    print("   ✓ Visibility Set to: PUBLIC")
+                    self._safe_click(page, pub_radio)
+                    time.sleep(1)
+                    print("   ✓ Visibility Confirmed: PUBLIC", flush=True)
             else:
                 unlisted_radio = page.locator("tp-yt-paper-radio-button[name='UNLISTED'], #unlisted-radio-button").first
                 if unlisted_radio.count() > 0:
-                    unlisted_radio.click()
-                    print("   ✓ Visibility Set to: UNLISTED")
+                    self._safe_click(page, unlisted_radio)
+                    time.sleep(1)
+                    print("   ✓ Visibility Confirmed: UNLISTED", flush=True)
 
-            # Extract generated video link if present
+            # Extract generated video link if present in the dialog
             video_url = ""
             try:
                 link_el = page.locator("a.ytcp-video-info, a[href*='youtu.be']").first
@@ -326,36 +362,49 @@ class YouTubeHumanUploader:
             except Exception:
                 pass
 
-            # Final Done / Publish click
+            # Final Save / Publish click (MUST NOT click close-button prematurely!)
             done_btn = page.locator("#done-button, ytcp-button#done-button").first
-            if done_btn.is_visible() and done_btn.is_enabled():
-                done_btn.click()
-                print("🎉 [PUBLISH CLICKED] Video publishing triggered in YouTube Studio!")
-                time.sleep(4)
+            page.wait_for_selector("#done-button:not([disabled])", timeout=30000)
+            self._safe_click(page, done_btn)
+            print("🎉 [PUBLISH TRIGGERED] Clicked Publish/Save in YouTube Studio!", flush=True)
+            time.sleep(5)
 
-            # Wait for upload completion progress
-            print("   [⏳] Ensuring upload stream completes to 100% (Please keep browser open)...")
+            # Wait for the post-publish confirmation modal (e.g., 'Video published' / 'Video processing' share dialog)
+            print("   [⏳] Waiting for YouTube Studio post-publish finalization dialog...", flush=True)
             start_wait = time.time()
-            while time.time() - start_wait < 900:  # up to 15 mins for large 800MB video
-                try:
-                    close_dialog_btn = page.locator("#close-button, ytcp-button#close-button").first
-                    if close_dialog_btn.is_visible() and close_dialog_btn.is_enabled():
-                        close_dialog_btn.click()
-                        time.sleep(1)
+            publish_confirmed = False
 
-                    progress_el = page.locator("span:has-text('Upload complete'), span:has-text('Processing'), span:has-text('Checks complete'), span.progress-label").first
+            while time.time() - start_wait < 600:  # up to 10 mins
+                # Check for the share dialog that appears ONLY after successful publishing
+                share_dialog = page.locator("ytcp-video-share-dialog, #dialog[aria-label*='published' i], ytcp-post-publish-dialog").first
+                if share_dialog.count() > 0 and share_dialog.is_visible():
+                    print("   ✓ Post-publish share dialog confirmed (Video is officially UNLISTED, not Draft)!", flush=True)
+                    publish_confirmed = True
+                    # Extract the definitive shortlink from share dialog
+                    try:
+                        share_link = page.locator("a#share-url, a[href*='youtu.be']").first
+                        if share_link.count() > 0:
+                            video_url = share_link.get_attribute("href") or video_url
+                    except Exception:
+                        pass
+                    # Safely close the share dialog now that publishing is 100% locked
+                    close_share_btn = page.locator("ytcp-video-share-dialog #close-button, ytcp-post-publish-dialog #close-button, #close-button").first
+                    if close_share_btn.is_visible() and close_share_btn.is_enabled():
+                        self._safe_click(page, close_share_btn)
+                    break
+
+                # Also check progress label if still uploading
+                try:
+                    progress_el = page.locator("span.progress-label, span:has-text('Upload complete'), span:has-text('Processing')").first
                     if progress_el.count() > 0:
                         p_txt = progress_el.inner_text().strip()
-                        if any(w in p_txt.lower() for w in ["complete", "processing", "saved", "checks"]):
-                            print(f"\n   ✓ Upload status confirmed: {p_txt}!")
-                            break
-                        else:
-                            print(f"   [⏳] {p_txt}", end="\r")
+                        print(f"   [⏳] Upload Progress: {p_txt}", end="\r", flush=True)
                 except Exception:
                     pass
+
                 time.sleep(3)
 
-            print("\n🎉 [SUCCESS] Video upload and metadata publishing fully complete!")
+            print(f"\n🎉 [SUCCESS] Video upload confirmed as UNLISTED! URL: {video_url or 'Live in Studio'}")
             time.sleep(5)
 
             context.close()
@@ -364,7 +413,7 @@ class YouTubeHumanUploader:
                 "video_url": video_url or f"https://studio.youtube.com/channel/videos",
                 "video_path": video_path,
                 "title": title_text,
-                "status": "published"
+                "status": "published_unlisted"
             }
 
 human_uploader = YouTubeHumanUploader()

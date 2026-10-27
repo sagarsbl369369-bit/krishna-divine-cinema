@@ -21,6 +21,7 @@ import subprocess
 import requests
 from google_gemini_tts import generate_google_realistic_voice
 from devotional_soundscape_engine import soundscape_engine
+from disk_sentinel import enforce_disk_safety_gate
 
 if sys.platform == "win32":
     try:
@@ -83,16 +84,16 @@ def format_timestamp(seconds: float) -> str:
 
 
 FALLBACK_DEVOTIONAL_QUERIES = [
-    "hindu temple",
-    "sacred fire flame",
+    "deep starry night sky",
+    "sacred fire flame dark",
     "meditation mountain sunrise",
     "divine rays sun clouds",
     "lotus flower pond",
-    "chariot horses",
-    "ancient temple stone",
-    "sunrise rishikesh himalayas",
+    "deep ocean storm waves",
+    "foggy misty pine forest",
+    "sunrise himalayas mountains",
     "cosmic nebula stars",
-    "river ganga sacred water"
+    "calm river flowing water"
 ]
 
 def fetch_unique_pixabay_clip(query: str, lock_engine: VisualLockEngine, unique_tag: str) -> str:
@@ -311,10 +312,11 @@ def build_chapter_video(chapter: dict, lock_engine: VisualLockEngine, channel_id
                 "-i", hook_sting,
                 "-filter_complex",
                 f"{v_filter_part}"
-                f"[1:a]volume=1.50[vocal];"
-                f"[2:a]volume=0.14,lowpass=f=2500[bgm];"
+                f"[1:a]volume=1.55[vocal];"
+                f"[2:a]volume=0.11,lowpass=f=2200[bgm];"
                 f"[3:a]volume=0.9[sting];"
-                f"[vocal][bgm][sting]amix=inputs=3:duration=first:dropout_transition=2[a_out]",
+                f"[vocal][bgm][sting]amix=inputs=3:duration=first:dropout_transition=2:normalize=false[a_mixed];"
+                f"[a_mixed]alimiter=limit=0.96:attack=5:release=50[a_out]",
                 "-map", v_map,
                 "-map", "[a_out]",
                 "-t", f"{duration:.2f}",
@@ -330,9 +332,10 @@ def build_chapter_video(chapter: dict, lock_engine: VisualLockEngine, channel_id
                 "-stream_loop", "-1", "-i", bgm_path,
                 "-filter_complex",
                 f"{v_filter_part}"
-                f"[1:a]volume=1.50[vocal];"
-                f"[2:a]volume=0.14,lowpass=f=2500[bgm];"
-                f"[vocal][bgm]amix=inputs=2:duration=first:dropout_transition=2[a_out]",
+                f"[1:a]volume=1.55[vocal];"
+                f"[2:a]volume=0.11,lowpass=f=2200[bgm];"
+                f"[vocal][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=false[a_mixed];"
+                f"[a_mixed]alimiter=limit=0.96:attack=5:release=50[a_out]",
                 "-map", v_map,
                 "-map", "[a_out]",
                 "-t", f"{duration:.2f}",
@@ -368,9 +371,13 @@ def build_chapter_video(chapter: dict, lock_engine: VisualLockEngine, channel_id
             ]
     subprocess.run(final_cmd, cwd=CHAPTERS_DIR, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    for temp_f in [ch_raw_video, manifest]:
+    # Rolling Garbage Collection: Purge raw segment files and normalized clips immediately to protect Drive C
+    for temp_f in [ch_raw_video, manifest] + normalized_clips:
         if os.path.exists(temp_f):
-            os.remove(temp_f)
+            try:
+                os.remove(temp_f)
+            except Exception:
+                pass
 
     print(f"   [✓] CHAPTER {ch_num} COMPLETE: {ch_video} ({duration:.2f}s)")
     return ch_video
@@ -393,6 +400,9 @@ def main():
     print("==================================================================")
     print("🕉️ EPIC SHRIMAD BHAGAVAD GITA LONG-FORM DOCUMENTARY ENGINE (35+ MIN)")
     print("==================================================================")
+
+    # 1. Enforce 10 GB Minimum Disk Safety Floor
+    enforce_disk_safety_gate(required_headroom_gb=10.0)
 
     # Ensure master script is present
     if not os.path.exists(active_script_path):

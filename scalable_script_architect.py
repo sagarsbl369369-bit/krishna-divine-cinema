@@ -89,34 +89,35 @@ class ScalableScriptArchitect:
 
     def _build_architect_prompt(self, topic: str, target_duration_mins: int, num_chapters: int, target_words_per_chapter: int, target_total_words: int, hook_premise: str, research_dossier: dict) -> str:
         return (
-            f"You are a master Vedic philosopher, psychologist, and cinematic documentary writer.\n"
-            f"Using this research dossier from our 10-Agent Swarm:\n"
-            f"{json.dumps(research_dossier.get('viral_youtube_mechanics', {}), ensure_ascii=False)}\n\n"
+            f"You are a master philosophical psychologist, existential deep-researcher, and cinematic audio writer.\n"
             f"TOPIC: '{topic}'\n"
             f"Write a {num_chapters}-chapter long-form masterpiece in 100% PURE LITERARY HINDI DEVANAGARI for a {target_duration_mins}-minute video.\n\n"
-            f"CRITICAL REQUIREMENTS:\n"
-            f"1. WORD COUNT: Each chapter's 'exposition' MUST contain at least {target_words_per_chapter} words. "
+            f"CRITICAL CONTENT RULES (NON-NEGOTIABLE):\n"
+            f"1. ZERO KURUKSHETRA / ZERO ANCIENT BATTLE MYTHOLOGY: Absolutely NO chariots, NO arrows/bows, NO ancient battlefield tropes. "
+            f"   The content MUST be 100% REAL-LIFE HUMAN PSYCHOLOGY that connects directly to modern human existence: "
+            f"   overthinking at 3 AM, betrayal by selfish people, career burnout, the trap of seeking validation, why loneliness is quiet power, "
+            f"   emotional detachment, and reclaiming personal sovereignty with quiet dignity.\n"
+            f"2. GOOSEBUMP FACTOR: Every chapter must deliver profound, logical, piercing truths that induce chills and deep realization.\n"
+            f"3. WORD COUNT: Each chapter's 'exposition' MUST contain at least {target_words_per_chapter} words. "
             f"   Total words across all {num_chapters} chapters MUST be >= {target_total_words} words to strictly guarantee > 30 mins runtime!\n"
-            f"2. ZERO MODERN ENGLISH WORDS: Absolute ban on English / Hinglish loanwords (e.g., focus, mindset, stress, depression, energy, level, vibe, logic, overthinking). "
-            f"   Use heavy, piercing, profound Vedic Hindi (चित्त, विषाद, अंतःकरण, काल-चक्र, प्रज्ञा, नश्वरता, आत्म-संशय, मोह-ग्रंथि).\n"
-            f"3. ZERO SANSKRIT SHLOKA RECITATION: Do NOT recite Sanskrit shlokas or chaupais in the voiceover exposition. "
-            f"   The voiceover must be 100% direct, goosebump-inducing ('रोंगटे खड़े कर देने वाला') Hindi philosophical storytelling.\n"
-            f"4. CHAPTER 1 HOOK: Chapter 1 MUST begin with this 0-5s visceral hook: '{hook_premise}'\n"
-            f"5. Provide 8 cinematic visual queries per chapter for stock footage matching (cosmic space, battlefield, rain, temples, warrior, fire, river, meditation).\n"
-            f"6. Output MUST be ONLY a valid JSON array of objects:\n"
+            f"4. ZERO MODERN ENGLISH WORDS: No English/Hinglish loanwords (no 'focus', 'mindset', 'stress', 'depression', 'vibe', 'overthinking'). "
+            f"   Use deep, evocative, profound Hindi.\n"
+            f"5. ZERO SANSKRIT SHLOKA RECITATION: Do NOT recite Sanskrit shlokas or chaupais in the voiceover exposition.\n"
+            f"6. 8 VISUAL QUERIES PER CHAPTER: Atmospheric, non-mythological queries: dark starry night, lonely person looking at cosmos, "
+            f"   ocean storm waves, deep misty forest rain, hourglass running sand, clock ticking in shadows, calm mountain sunrise, deep space nebula.\n"
+            f"7. Output MUST be ONLY a valid JSON array of objects:\n"
             f"[\n"
             f"  {{\n"
             f"    \"chapter_num\": 1,\n"
             f"    \"title\": \"अध्याय शीर्षक\",\n"
-            f"    \"shloka\": \"लिखित संदर्भ मात्र\",\n"
             f"    \"exposition\": \"न्यूनतम {target_words_per_chapter} शब्दों का गहरा, तार्किक और रोंगटे खड़े कर देने वाला शुद्ध हिंदी विवेचन...\",\n"
-            f"    \"visual_queries\": [\"cosmic space nebula\", \"ancient chariot kurukshetra\", \"lightning storm\", \"warrior hands holding bow\", \"sacred fire flames\", \"deep ocean waves\", \"golden morning sun rays\", \"meditating yogi\"]\n"
+            f"    \"visual_queries\": [\"cosmic space nebula\", \"lonely person looking at stars\", \"deep stormy ocean\", \"foggy pine forest\", \"temple candle flame night\", \"running sand hourglass\", \"mountain sunrise golden light\", \"calm flowing river\"]\n"
             f"  }}\n"
             f"]"
         )
 
     def _generate_with_gemini(self, prompt: str) -> List[Dict[str, Any]]:
-        candidate_models = ["gemini-3.5-flash", "gemini-3.8-flash"]
+        candidate_models = ["gemini-3-flash-preview", "gemini-3.1-flash-lite-preview"]
         for model_name in candidate_models:
             try:
                 print(f"   [⚡ Gemini Architect] Drafting cinematic script with '{model_name}'...")
@@ -257,6 +258,7 @@ class ScalableScriptArchitect:
             words_total = sum(len(c.get("exposition", "").split()) for c in chapters)
             print(f"   [✓] 100% Unique Script Architected Successfully: {len(chapters)} Chapters, {words_total:,} Words!")
             print(f"   [📁] Saved to: {save_path}")
+            self.last_saved_path = save_path
             return chapters
 
         raise RuntimeError("Failed to generate fresh script across both Gemini and Groq engines!")

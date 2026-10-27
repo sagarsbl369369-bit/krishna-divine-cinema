@@ -25,6 +25,7 @@ from viral_thumbnail_engine import thumbnail_engine
 from youtube_channel_auto_uploader import upload_video_to_youtube
 from youtube_channel_manager import channel_manager
 from youtube_human_uploader import YouTubeHumanUploader, human_uploader
+from disk_sentinel import enforce_disk_safety_gate
 
 if sys.platform == "win32":
     try:
@@ -70,7 +71,7 @@ def execute_complete_autonomous_run(
         print(f"[*] Engaging AI Topic Brain tailored specifically for {chosen_channel_name}...")
         topic_data = autonomous_brain.discover_next_viral_topic(channel_id=chosen_channel_id)
         topic_title = topic_data["topic_title"]
-        target_duration = max(target_duration, topic_data.get("target_duration_mins", 35))
+        target_duration = target_duration or topic_data.get("target_duration_mins", 35)
 
     print(f"\n🎯 SELECTED TOPIC: '{topic_title}'")
     print(f"⏱️ TARGET RUNTIME: {target_duration} Minutes (Guaranteed > 30 Mins)")
@@ -92,10 +93,17 @@ def execute_complete_autonomous_run(
     total_words = sum(len(c.get("exposition", "").split()) for c in chapters)
     print(f"✓ [STEP 2 COMPLETE] Script Ready: {len(chapters)} Chapters, {total_words:,} Words!\n")
 
-    # 4. CINEMA RENDERING WITH SMART 24K GOLD SUBTITLES & 150% VOLUME
-    print("▶️ STEP 3/5: Rendering Master Video with Google Free TTS ('Charon') + 150% Volume + Smart 24K Gold Subtitles...")
+    # 4. STORAGE SAFETY GATE & CINEMA RENDERING
+    enforce_disk_safety_gate(required_headroom_gb=10.0)
+    print("▶️ STEP 3/5: Rendering Master Video with Shure SM7B DSP + 155% Volume + Sidechain Ducked Flute & Tanpura...")
     engine_script = os.path.join(BASE_DIR, "epic_geeta_documentary_engine.py")
-    cmd = [sys.executable, "-u", engine_script, "--force-fresh", "--channel", chosen_channel_id]
+    script_path = getattr(script_architect, "last_saved_path", os.path.join(BASE_DIR, "epic_30min_script.json"))
+    cmd = [
+        sys.executable, "-u", engine_script,
+        "--force-fresh",
+        "--channel", chosen_channel_id,
+        "--script", script_path
+    ]
     
     proc = subprocess.Popen(
         cmd,
@@ -199,7 +207,7 @@ if __name__ == "__main__":
 
     execute_complete_autonomous_run(
         custom_topic=args.topic,
-        target_duration=max(args.duration, 30),
+        target_duration=args.duration,
         research_mins=max(args.research_mins, 1.0),
         target_channel=args.channel,
         privacy=args.privacy,

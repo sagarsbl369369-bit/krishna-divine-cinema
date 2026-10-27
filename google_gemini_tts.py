@@ -36,14 +36,15 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 # Load config for voice settings
 SHURE_SM7B_DSP_CHAIN = (
     "aresample=48000,"
-    "highpass=f=75,"
-    "equalizer=f=180:t=q:w=1.2:g=3.5,"
-    "equalizer=f=450:t=q:w=1.5:g=-1.8,"
-    "equalizer=f=3200:t=q:w=1.1:g=2.5,"
-    "equalizer=f=6800:t=q:w=2.0:g=-3.0,"
-    "lowpass=f=13500,"
-    "compand=attacks=0.015:decays=0.12:points=-80/-80|-45/-32|-24/-17|-12/-10|0/-7:gain=2.5,"
-    "loudnorm=I=-14:TP=-1.0:LRA=9"
+    "aformat=channel_layouts=stereo,"
+    "highpass=f=70,"
+    "equalizer=f=160:t=q:w=1.2:g=5.0,"   # Deep chest warmth / Shure SM7B proximity
+    "equalizer=f=420:t=q:w=1.5:g=-3.0,"  # Eliminates nasal / boxy mud
+    "equalizer=f=2800:t=q:w=1.0:g=3.2,"  # Clear vocal intimacy & presence
+    "equalizer=f=6500:t=q:w=2.0:g=-3.5,"  # Smooth de-esser for sibilants
+    "lowpass=f=14500,"                    # Silky vintage broadcast top end
+    "compand=attacks=0.012:decays=0.15:points=-80/-80|-45/-28|-24/-14|-12/-8|0/-5:gain=4.2,"
+    "loudnorm=I=-14:TP=-1.0:LRA=9"       # EBU R128 YouTube broadcast standard
 )
 
 CANDIDATE_TTS_MODELS = [
@@ -169,25 +170,54 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
         tts_ok = False
         try:
             import asyncio, edge_tts
-            async def _synth_direct():
-                comm = edge_tts.Communicate(clean_text, "hi-IN-MadhurNeural", rate="+0%", pitch="-2Hz")
-                await comm.save(raw_mp3)
-            asyncio.run(_synth_direct())
+            from pydub import AudioSegment
+
+            # Split clean text by natural sentence markers and stitch with real audio silence
+            raw_sents = re.split(r'([।!\?\n]+)', clean_text)
+            stitched_audio = AudioSegment.empty()
+            temp_seg_dir = os.path.join(TEMP_DIR, f"stitch_{int(time.time()*1000)}")
+            os.makedirs(temp_seg_dir, exist_ok=True)
+
+            async def _synth_sentence(s_text, s_path):
+                comm = edge_tts.Communicate(s_text, "hi-IN-MadhurNeural", rate="-7%", pitch="-4Hz")
+                await comm.save(s_path)
+
+            seg_idx = 0
+            for i in range(0, len(raw_sents), 2):
+                s = raw_sents[i].strip()
+                delim = raw_sents[i+1] if i+1 < len(raw_sents) else "।"
+                if not s:
+                    continue
+                full_sent = f"{s}{delim}"
+                pause_ms = 1100 if "?" in delim else 750
+                s_file = os.path.join(temp_seg_dir, f"s_{seg_idx:03d}.mp3")
+                asyncio.run(_synth_sentence(full_sent, s_file))
+                if os.path.exists(s_file):
+                    seg_aud = AudioSegment.from_file(s_file)
+                    stitched_audio += seg_aud + AudioSegment.silent(duration=pause_ms)
+                    try: os.remove(s_file)
+                    except Exception: pass
+                seg_idx += 1
+
+            try: os.rmdir(temp_seg_dir)
+            except Exception: pass
+
+            stitched_audio.export(raw_mp3, format="mp3", bitrate="320k")
             if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
                 tts_ok = True
         except Exception as e_direct:
-            print(f"      [!] Python edge_tts direct failed: {e_direct}, attempting CLI fallback...")
-
-        if not tts_ok:
+            print(f"      [!] Python sentence-stitched fallback error: {e_direct}, attempting single call...")
             cmd_tts = [
                 sys.executable, "-m", "edge_tts",
                 "--voice", "hi-IN-MadhurNeural",
-                "--rate", "+0%",
-                "--pitch", "-2Hz",
+                "--rate", "-7%",
+                "--pitch", "-4Hz",
                 "--text", clean_text,
                 "--write-media", raw_mp3
             ]
             subprocess.run(cmd_tts, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+                tts_ok = True
         unmastered_audio = raw_mp3
     else:
         # Concatenate all rendered Gemini TTS chunks
