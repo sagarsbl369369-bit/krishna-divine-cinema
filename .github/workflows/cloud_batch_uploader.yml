@@ -1,0 +1,50 @@
+name: Cloud Autonomous Batch Uploader (Zero-PC)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Source GitHub Run ID containing rendered video artifacts'
+        required: true
+        default: '40484694835'
+
+jobs:
+  cloud_upload:
+    name: Cloud Batch Studio Uploader
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: 📥 Checkout Repository Code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11 Runtime
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 🎬 Install FFmpeg & Indian Devanagari Fonts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-hinted fonts-deva
+
+      - name: 📦 Install Python Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install playwright requests
+
+      - name: 🌐 Install Playwright & Headless Chromium
+        run: |
+          playwright install chromium --with-deps
+
+      - name: 🚀 Execute Cloud Batch Uploader to YouTube Studio
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YT_STORAGE_STATE_CH01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
+          YT_STORAGE_STATE_CH_01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
+          YT_STORAGE_STATE_CH02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
+          YT_STORAGE_STATE_CH_02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
+        run: |
+          python cloud_batch_uploader.py ${{ github.event.inputs.run_id || '40484694835' }}
