@@ -16,7 +16,7 @@ on:
         required: true
         default: '15.0'
   schedule:
-    - cron: '0 6 * * 1,4' # Autonomous bi-weekly cron: Mondays & Thursdays at 6:00 AM UTC (11:30 AM IST)
+    - cron: '30 17 * * *' # 24/7 Daily Autonomous Schedule: Triggers at 17:30 UTC (11:00 PM IST) -> Uploads land at 12:00 AM Midnight IST every single night!
 
 jobs:
   produce_video:
