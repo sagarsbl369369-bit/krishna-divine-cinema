@@ -34,6 +34,8 @@ if sys.platform == "win32":
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_DIR = os.path.join(BASE_DIR, "credentials")
+RENDERS_DIR = os.path.join(BASE_DIR, "renders")
+os.makedirs(RENDERS_DIR, exist_ok=True)
 BROWSER_PROFILE_DIR = os.path.join(CREDENTIALS_DIR, "youtube_browser_profile")
 SESSION_STATUS_FILE = os.path.join(CREDENTIALS_DIR, "youtube_session_status.json")
 os.makedirs(BROWSER_PROFILE_DIR, exist_ok=True)
@@ -126,6 +128,7 @@ class YouTubeHumanUploader:
             try:
                 ctx = p.chromium.launch_persistent_context(**launch_kwargs)
                 self._inject_stealth(ctx)
+                self._inject_storage_cookies(ctx)
                 return ctx
             except Exception as e_prof:
                 print(f"[ℹ️] Chrome persistent launch fallback ({e_prof}). Retrying with base Chromium...")
@@ -135,6 +138,7 @@ class YouTubeHumanUploader:
                 try:
                     ctx = p.chromium.launch_persistent_context(**launch_kwargs)
                     self._inject_stealth(ctx)
+                    self._inject_storage_cookies(ctx)
                     return ctx
                 except Exception as e_fallback:
                     print(f"[!] Persistent launch error: {e_fallback}. Falling back to storage state...")
@@ -166,6 +170,39 @@ class YouTubeHumanUploader:
             args=launch_args,
             viewport={"width": 1920, "height": 1080}
         )
+
+    def _inject_storage_cookies(self, ctx):
+        state_candidates = [
+            os.path.join(CREDENTIALS_DIR, f"storage_state_{self.channel_id}.json"),
+            f"/tmp/storage_state_{self.channel_id}.json",
+            os.path.join(CREDENTIALS_DIR, f"{self.channel_id}_storage_state.json")
+        ]
+        active_state = next((s for s in state_candidates if os.path.exists(s) and os.path.getsize(s) > 100), None)
+        if active_state:
+            try:
+                with open(active_state, "r", encoding="utf-8") as sf:
+                    st_json = json.load(sf)
+                raw_cookies = st_json.get("cookies", [])
+                if raw_cookies:
+                    cleaned = []
+                    for c in raw_cookies:
+                        c_copy = {
+                            "name": c["name"],
+                            "value": c["value"],
+                            "domain": c["domain"],
+                            "path": c.get("path", "/"),
+                            "secure": c.get("secure", False),
+                            "httpOnly": c.get("httpOnly", False)
+                        }
+                        if "expires" in c and c["expires"] > 0:
+                            c_copy["expires"] = c["expires"]
+                        if "sameSite" in c and c["sameSite"] in ["Strict", "Lax", "None"]:
+                            c_copy["sameSite"] = c["sameSite"]
+                        cleaned.append(c_copy)
+                    ctx.add_cookies(cleaned)
+                    print(f"   ✓ Injected {len(cleaned)} authenticated cookies from {os.path.basename(active_state)}!")
+            except Exception as e_cook:
+                print(f"   ⚠️ Cookie injection note: {e_cook}")
 
     def _inject_stealth(self, context):
         """Injects anti-detection stealth scripts into browser context."""
@@ -279,7 +316,7 @@ class YouTubeHumanUploader:
                 )
 
             page = context.new_page()
-            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", timeout=60000)
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}/videos", timeout=60000)
 
             logged_in = False
             start_t = time.time()

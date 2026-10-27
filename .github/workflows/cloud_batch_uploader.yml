@@ -42,7 +42,7 @@ jobs:
           playwright install chromium --with-deps
           playwright install chrome --with-deps || true
 
-      - name: 🔐 Decrypt & Unpack Authenticated Channel Profiles
+      - name: 🔐 Decrypt & Unpack Authenticated Channel Profiles & Session Cookies
         env:
           MASTER_KEY: ${{ secrets.CH_PROFILE_SECRET_KEY }}
         run: |
@@ -56,6 +56,17 @@ jobs:
             python decrypt_profile.py "$MASTER_KEY" "credentials/profile_ch_02.tar.gz.enc" /tmp/p2.tar.gz
             tar -xzf /tmp/p2.tar.gz -C /tmp/chrome_user_data_ch02
             echo "✓ CH02 Profile Unpacked"
+          fi
+          # Decrypt and copy authenticated session cookies (DPAPI bypass)
+          if [ -f "credentials/storage_state_ch_01.json.enc" ] && [ -n "$MASTER_KEY" ]; then
+            python decrypt_profile.py "$MASTER_KEY" "credentials/storage_state_ch_01.json.enc" credentials/storage_state_ch_01.json
+            cp credentials/storage_state_ch_01.json /tmp/storage_state_ch_01.json
+            echo "✓ CH01 Session Cookies Decrypted & Loaded to /tmp"
+          fi
+          if [ -f "credentials/storage_state_ch_02.json.enc" ] && [ -n "$MASTER_KEY" ]; then
+            python decrypt_profile.py "$MASTER_KEY" "credentials/storage_state_ch_02.json.enc" credentials/storage_state_ch_02.json
+            cp credentials/storage_state_ch_02.json /tmp/storage_state_ch_02.json
+            echo "✓ CH02 Session Cookies Decrypted & Loaded to /tmp"
           fi
 
       - name: 🚀 Execute Cloud Batch Uploader to YouTube Studio
