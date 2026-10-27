@@ -390,27 +390,66 @@ class YouTubeHumanUploader:
                 pass
             time.sleep(2)
 
-            # 2. Click Create / Upload
+            # Dismiss any welcome / update overlay modals
+            for dismiss_sel in ["#dismiss-button", "ytcp-button:has-text('Dismiss')", "ytcp-button:has-text('Got it')", "ytcp-button:has-text('Continue')"]:
+                try:
+                    d_btn = page.locator(dismiss_sel).first
+                    if d_btn.count() > 0 and d_btn.is_visible():
+                        print(f"   -> Dismissed overlay modal: {dismiss_sel}", flush=True)
+                        self._safe_click(page, d_btn)
+                        time.sleep(1)
+                except Exception:
+                    pass
+
+            # 2. Open Video Upload Dialog (Triple-Redundant Strategy)
             print("[2/7] Opening Video Upload Dialog...", flush=True)
-            for _ in range(3):
+            for attempt in range(6):
                 if page.locator("input[type='file']").count() > 0:
                     break
-                create_btn = page.locator("#create-icon, ytcp-button:has-text('Create'), #upload-icon, #upload-button").first
-                if create_btn.count() > 0:
+                # Strategy A: Center page upload button
+                center_btn = page.locator("#upload-button, ytcp-button:has-text('Upload videos'), ytcp-button:has-text('Upload video')").first
+                if center_btn.count() > 0 and center_btn.is_visible():
+                    print("   -> Clicking center upload button...", flush=True)
+                    self._safe_click(page, center_btn)
+                    time.sleep(3)
+                    continue
+
+                # Strategy B: Top-right Create menu
+                create_btn = page.locator("#create-icon, ytcp-button:has-text('Create'), #upload-icon").first
+                if create_btn.count() > 0 and create_btn.is_visible():
+                    print("   -> Clicking Create icon...", flush=True)
                     self._safe_click(page, create_btn)
                     time.sleep(2)
                     upload_item = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('Upload'), #text-item-0").first
-                    if upload_item.count() > 0:
+                    if upload_item.count() > 0 and upload_item.is_visible():
                         self._safe_click(page, upload_item)
                         time.sleep(3)
+                        continue
+
+                # Strategy C: Direct URL trigger (?d=ud)
+                if attempt == 3:
+                    print("   -> Navigating to direct upload dialog URL (?d=ud)...", flush=True)
+                    page.goto(f"https://studio.youtube.com/channel/{real_ch_id}/videos?d=ud", wait_until="domcontentloaded", timeout=45000)
+                    time.sleep(4)
+
+                time.sleep(2)
 
             time.sleep(2)
 
             # 3. Select Video File
             print(f"[3/7] Selecting Video File ({os.path.basename(video_path)})...", flush=True)
             file_input = page.locator("input[type='file']").first
-            file_input.wait_for(state="attached", timeout=30000)
-            file_input.set_input_files(video_path)
+            try:
+                file_input.wait_for(state="attached", timeout=15000)
+                file_input.set_input_files(video_path)
+            except Exception as e_fi:
+                print(f"   ⚠️ Direct input[type=file] fallback ({e_fi}). Triggering select files button...")
+                # Trigger file chooser via select files button
+                with page.expect_file_chooser(timeout=20000) as fc_info:
+                    sel_btn = page.locator("#select-files-button, ytcp-button:has-text('Select files'), [aria-label*='Select files' i]").first
+                    self._safe_click(page, sel_btn)
+                file_chooser = fc_info.value
+                file_chooser.set_files(video_path)
 
             print("   [⏳] Waiting for YouTube Studio upload dialog to initialize...")
             page.wait_for_selector("#title-textarea, #textbox[aria-label*='title' i]", timeout=60000)
