@@ -1,23 +1,22 @@
 @echo off
-title YouTube Studio Channel 2 Login (Premanand Ji Vichar)
+title YouTube Studio Channel 2 Switcher (Geeta Jeevan Sutra)
 color 0B
 cls
 echo ======================================================================
-echo 🕉️ YOUTUBE STUDIO CHANNEL 2 (PREMANAND JI VICHAR) ONE-TIME LOGIN
+echo 🕉️ YOUTUBE STUDIO CHANNEL 2 (GEETA JEEVAN SUTRA) SWITCHER
 echo ======================================================================
 echo.
-echo Opening Google Chrome for Channel 2...
-echo 👉 Please sign in to your SECOND YouTube channel in the opened Chrome window.
+echo Opening YouTube Channel Switcher in Chrome...
 echo.
-echo 💾 Your session for Channel 2 will be permanently saved in:
-echo    credentials\youtube_browser_profile_ch_02
+echo 👉 Chrome khulega jisme aapka account pehle se logged-in hai!
+echo 👉 Aapko bas 'Geeta Jeevan Sutra' channel par 1 CLICK karna hai!
+echo.
 echo ======================================================================
-cd /d "%~dp0"
-start chrome.exe --user-data-dir="%~dp0credentials\youtube_browser_profile_ch_02" "https://studio.youtube.com"
+start chrome.exe --user-data-dir="%~dp0credentials\youtube_browser_profile_ch_02" "https://www.youtube.com/channel_switcher"
 echo.
-echo Chrome for Channel 2 launched successfully!
-echo.
-echo When you finish logging in to Channel 2, press any key to verify:
+echo Chrome khul chuka hai!
+echo 'Geeta Jeevan Sutra' par click karne ke baad Chrome window ko close kar dein aur yahan koi bhi key dabayein:
 pause
+cd /d "%~dp0"
 python youtube_human_uploader.py --check --channel ch_02
 pause
