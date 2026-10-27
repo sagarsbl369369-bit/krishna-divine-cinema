@@ -68,7 +68,7 @@ class YouTubeHumanUploader:
                         pass
 
     def _launch_context(self, p, headless: bool = False):
-        """Launches persistent browser context with automatic fallback to dedicated Chromium."""
+        """Launches browser context using storage_state (Cloud/Local) or persistent profile dir."""
         self.clean_stale_locks()
         launch_args = [
             "--disable-blink-features=AutomationControlled",
@@ -76,6 +76,26 @@ class YouTubeHumanUploader:
             "--disable-dev-shm-usage",
             "--start-maximized"
         ]
+
+        # 1. Prefer Storage State JSON if available (Ultra-clean for GitHub Actions & Local)
+        state_candidates = [
+            os.path.join(CREDENTIALS_DIR, f"storage_state_{self.channel_id}.json"),
+            os.path.join(CREDENTIALS_DIR, f"{self.channel_id}_storage_state.json")
+        ]
+        active_state = next((s for s in state_candidates if os.path.exists(s) and os.path.getsize(s) > 1000), None)
+        if active_state:
+            print(f"[*] Authenticating with Playwright Storage State: {active_state}")
+            try:
+                browser = p.chromium.launch(headless=headless, args=launch_args)
+                return browser.new_context(
+                    storage_state=active_state,
+                    viewport={"width": 1920, "height": 1080},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                )
+            except Exception as e_state:
+                print(f"[!] Storage state launch error: {e_state}. Falling back to persistent profile...")
+
+        # 2. Fallback to Persistent User Profile Directory
         try:
             return p.chromium.launch_persistent_context(
                 user_data_dir=self.profile_dir,

@@ -1,27 +1,33 @@
-name: 10-Video Parallel Autonomous Cloud Engine
+name: 10-Video Parallel Autonomous Cloud Engine (Zero-PC)
 
 on:
   workflow_dispatch:
     inputs:
       target_duration:
-        description: 'Target Video Duration in Minutes (>30 mins)'
+        description: 'Target Video Duration in Minutes (>35 mins)'
         required: true
         default: '35'
       privacy:
         description: 'Video Visibility (Strictly unlisted)'
         required: true
         default: 'unlisted'
+      research_mins:
+        description: 'Groq Swarm Deep Research Minutes (Hard-locked 15m)'
+        required: true
+        default: '15.0'
+  schedule:
+    - cron: '0 6 * * 1,4' # Autonomous bi-weekly cron: Mondays & Thursdays at 6:00 AM UTC (11:30 AM IST)
 
 jobs:
   produce_video:
-    name: Worker ${{ matrix.worker_id }} (Channel ${{ matrix.worker_id <= 5 && '1' || '2' }})
+    name: Worker ${{ matrix.worker_id }} (${{ matrix.worker_id <= 5 && 'Geeta Gyan 60 Sec' || 'Geeta Jeevan Sutra' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         worker_id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-    timeout-minutes: 60 # Protection: Kills container if exceeds 60 minutes
+    timeout-minutes: 90 # High tolerance: 15m research + 30m render + 10m upload
 
     steps:
       - name: 🧹 Free Disk Space (Expands available root space to 35GB)
@@ -51,7 +57,12 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install edge-tts
+          pip install edge-tts pydub
+
+      - name: 🌐 Install Playwright & Headless Chromium
+        run: |
+          pip install playwright
+          playwright install chromium --with-deps
 
       - name: ⚡ Run Autonomous Video Worker ${{ matrix.worker_id }}
         env:
@@ -59,14 +70,15 @@ jobs:
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          YT_STORAGE_STATE_CH01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
+          YT_STORAGE_STATE_CH02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
           YT_CLIENT_SECRET_CH01: ${{ secrets.YT_CLIENT_SECRET_CH01 }}
-          YT_TOKEN_CH01: ${{ secrets.YT_TOKEN_CH01 }}
           YT_CLIENT_SECRET_CH02: ${{ secrets.YT_CLIENT_SECRET_CH02 }}
-          YT_TOKEN_CH02: ${{ secrets.YT_TOKEN_CH02 }}
           PRIVACY: ${{ github.event.inputs.privacy || 'unlisted' }}
           DURATION: ${{ github.event.inputs.target_duration || '35' }}
+          RESEARCH_MINS: ${{ github.event.inputs.research_mins || '15.0' }}
         run: |
-          python github_worker_node.py --worker_id ${{ matrix.worker_id }} --duration ${{ github.event.inputs.target_duration || '35' }} --privacy ${{ github.event.inputs.privacy || 'unlisted' }}
+          python github_worker_node.py --worker_id ${{ matrix.worker_id }} --duration ${{ github.event.inputs.target_duration || '35' }} --privacy ${{ github.event.inputs.privacy || 'unlisted' }} --research_mins ${{ github.event.inputs.research_mins || '15.0' }}
 
       - name: 💾 Preserve Rendered Video & SEO Package as Artifact
         if: always()
@@ -75,7 +87,8 @@ jobs:
           name: video-worker-${{ matrix.worker_id }}-channel-${{ matrix.worker_id <= 5 && '1' || '2' }}
           path: |
             renders/*.mp4
-            renders/*.png
+            renders/thumbnails/*
+            renders/seo_packages/*
             renders/*upload_manifest.json
           retention-days: 7
 
