@@ -25,9 +25,11 @@ jobs:
           cache: 'pip'
 
       - name: 🎬 Install FFmpeg, Xvfb & Indian Devanagari Fonts
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg xvfb fonts-noto-hinted fonts-deva
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends xvfb ffmpeg fonts-noto-hinted fonts-deva
 
       - name: 📦 Install Python Dependencies
         run: |
