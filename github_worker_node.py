@@ -116,8 +116,9 @@ def setup_cloud_environment(worker_id: int, channel_id: str):
         json.dump(cfg, f, indent=2)
 
     # 3. Setup Channel Playwright Storage State (YouTube Studio Auth Cookies)
-    st_var = f"YT_STORAGE_STATE_{channel_id.upper()}"
-    st_data = os.getenv(st_var, "")
+    st_var1 = f"YT_STORAGE_STATE_{channel_id.upper()}"                     # YT_STORAGE_STATE_CH_01
+    st_var2 = f"YT_STORAGE_STATE_{channel_id.upper().replace('_', '')}"     # YT_STORAGE_STATE_CH01
+    st_data = os.getenv(st_var1) or os.getenv(st_var2) or ""
     if st_data:
         try:
             st_json = json.loads(st_data)
@@ -127,10 +128,13 @@ def setup_cloud_environment(worker_id: int, channel_id: str):
             print(f"✓ Configured Playwright Storage State for {channel_id} ({os.path.getsize(st_path)} bytes)")
         except Exception as e:
             print(f"⚠️ Error unpacking storage state for {channel_id}: {e}")
+    else:
+        print(f"⚠️ Warning: Neither {st_var1} nor {st_var2} found in runner environment!")
 
     # 4. Setup OAuth2 Client Secret if present
-    cs_var = f"YT_CLIENT_SECRET_{channel_id.upper()}"
-    cs_data = os.getenv(cs_var, "")
+    cs_var1 = f"YT_CLIENT_SECRET_{channel_id.upper()}"                     # YT_CLIENT_SECRET_CH_01
+    cs_var2 = f"YT_CLIENT_SECRET_{channel_id.upper().replace('_', '')}"     # YT_CLIENT_SECRET_CH01
+    cs_data = os.getenv(cs_var1) or os.getenv(cs_var2) or ""
     if cs_data:
         try:
             cs_json = json.loads(cs_data)

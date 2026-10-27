@@ -57,7 +57,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install edge-tts pydub
+          pip install edge-tts pydub gtts
 
       - name: 🌐 Install Playwright & Headless Chromium
         run: |
@@ -71,9 +71,13 @@ jobs:
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
           YT_STORAGE_STATE_CH01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
+          YT_STORAGE_STATE_CH_01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
           YT_STORAGE_STATE_CH02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
+          YT_STORAGE_STATE_CH_02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
           YT_CLIENT_SECRET_CH01: ${{ secrets.YT_CLIENT_SECRET_CH01 }}
+          YT_CLIENT_SECRET_CH_01: ${{ secrets.YT_CLIENT_SECRET_CH01 }}
           YT_CLIENT_SECRET_CH02: ${{ secrets.YT_CLIENT_SECRET_CH02 }}
+          YT_CLIENT_SECRET_CH_02: ${{ secrets.YT_CLIENT_SECRET_CH02 }}
           PRIVACY: ${{ github.event.inputs.privacy || 'unlisted' }}
           DURATION: ${{ github.event.inputs.target_duration || '35' }}
           RESEARCH_MINS: ${{ github.event.inputs.research_mins || '15.0' }}

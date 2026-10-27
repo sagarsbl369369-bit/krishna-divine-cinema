@@ -185,10 +185,17 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
                         await comm.save(s_path)
                         if os.path.exists(s_path) and os.path.getsize(s_path) > 300:
                             return True
-                    except Exception as err:
-                        if att == max_attempts - 1:
-                            raise err
-                        await asyncio.sleep(1.5 * (att + 1))
+                    except Exception:
+                        await asyncio.sleep(1.0 * (att + 1))
+                # Fallback to gTTS for this single sentence if edge-tts fails
+                try:
+                    from gtts import gTTS
+                    tts = gTTS(text=s_text, lang='hi', slow=False)
+                    tts.save(s_path)
+                    if os.path.exists(s_path) and os.path.getsize(s_path) > 300:
+                        return True
+                except Exception:
+                    pass
                 return False
 
             seg_idx = 0
@@ -243,11 +250,14 @@ def generate_google_realistic_voice(text: str, audio_path: str, voice_name: str 
             
             if not tts_ok:
                 print("      [!] Edge-TTS unavailable, failing over to gTTS with Shure SM7B DSP...")
-                from gtts import gTTS
-                tts = gTTS(text=clean_text, lang='hi', slow=False)
-                tts.save(raw_mp3)
-                if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
-                    tts_ok = True
+                try:
+                    from gtts import gTTS
+                    tts = gTTS(text=clean_text, lang='hi', slow=False)
+                    tts.save(raw_mp3)
+                    if os.path.exists(raw_mp3) and os.path.getsize(raw_mp3) > 1000:
+                        tts_ok = True
+                except Exception as e_gtts:
+                    print(f"      [!] gTTS fallback error: {e_gtts}")
         unmastered_audio = raw_mp3
     else:
         # Concatenate all rendered Gemini TTS chunks
