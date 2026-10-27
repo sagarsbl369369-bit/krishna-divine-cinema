@@ -83,7 +83,7 @@ class YouTubeHumanUploader:
             os.path.join(CREDENTIALS_DIR, f"{self.channel_id}_storage_state.json")
         ]
         active_state = next((s for s in state_candidates if os.path.exists(s) and os.path.getsize(s) > 1000), None)
-        if active_state:
+        if active_state and headless:
             print(f"[*] Authenticating with Playwright Storage State: {active_state}")
             try:
                 browser = p.chromium.launch(headless=headless, args=launch_args)
@@ -151,47 +151,78 @@ class YouTubeHumanUploader:
     def launch_session_login(self, channel_id: str = "ch_01", timeout_seconds: int = 300) -> bool:
         """
         Launches visible browser window allowing user to log in ONCE for specified channel.
-        Session is permanently saved to `youtube_browser_profile/` or `youtube_browser_profile_ch_02/`.
+        Session is permanently saved to `youtube_browser_profile/` and exported to `storage_state_{channel_id}.json`.
         """
         self.channel_id = channel_id
         self.profile_dir = get_channel_profile_dir(channel_id)
         os.makedirs(self.profile_dir, exist_ok=True)
         status_file = get_channel_status_file(channel_id)
+        st_path = os.path.join(CREDENTIALS_DIR, f"storage_state_{channel_id}.json")
+
+        real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
+        ch_name = "Geeta Gyan 60 Sec" if channel_id == "ch_01" else "Geeta Jeevan Sutra"
 
         print("\n" + "=" * 70)
-        print(f"🌐 YOUTUBE STUDIO HUMAN-MIMICRY LOGIN FOR CHANNEL: {channel_id.upper()}")
+        print(f"🌐 YOUTUBE STUDIO LOGIN WINDOW: [{ch_name}]")
         print("=" * 70)
-        print("Opening YouTube Studio in your persistent browser profile...")
+        print(f"Opening YouTube Studio in Chrome ({ch_name})...")
         print(f"📁 Session Directory: {self.profile_dir}")
-        print("👉 Please log in to your YouTube channel in the opened browser window.")
-        print(f"⏳ Waiting up to {timeout_seconds} seconds (5 minutes) for login completion...")
+        print("👉 Please select your Google account / sign in if prompted.")
+        print(f"⏳ Waiting up to {timeout_seconds} seconds for login completion...")
         print("=" * 70 + "\n")
 
+        self.clean_stale_locks()
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--start-maximized"
+        ]
+
         with sync_playwright() as p:
-            context = self._launch_context(p, headless=False)
+            try:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=self.profile_dir,
+                    headless=False,
+                    channel="chrome",
+                    args=launch_args,
+                    viewport=None
+                )
+            except Exception:
+                context = p.chromium.launch_persistent_context(
+                    user_data_dir=self.profile_dir,
+                    headless=False,
+                    args=launch_args,
+                    viewport=None
+                )
+
             page = context.new_page()
-            page.goto("https://studio.youtube.com")
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", timeout=60000)
 
             logged_in = False
             start_t = time.time()
             while time.time() - start_t < timeout_seconds:
-                time.sleep(3)
+                time.sleep(2)
                 current_url = page.url
-                if "studio.youtube.com" in current_url and "accounts.google.com" not in current_url:
-                    if page.locator("#create-icon, #upload-button, ytcp-button#create-icon, #channel-name").count() > 0 or "channel" in current_url:
-                        logged_in = True
-                        break
+                if "accounts.google.com" not in current_url and "signin" not in current_url:
+                    if "studio.youtube.com" in current_url:
+                        if page.locator("#create-icon, #upload-button, ytcp-button#create-icon, #channel-name, div#entity-name").count() > 0 or "channel" in current_url:
+                            logged_in = True
+                            break
 
             if logged_in:
-                print(f"🎉 [SUCCESS] Logged in to YouTube Studio for {channel_id}! Session cookies saved permanently.")
+                print(f"🎉 [SUCCESS] Logged in to YouTube Studio for {channel_id} ({ch_name})!")
+                time.sleep(3)
+                # Export clean storage state JSON
+                context.storage_state(path=st_path)
+                print(f"✓ Saved fresh Playwright Storage State to {st_path} ({os.path.getsize(st_path)} bytes)!")
                 try:
                     with open(status_file, "w", encoding="utf-8") as f:
                         json.dump({"logged_in": True, "last_login": time.time(), "channel_id": channel_id, "url": page.url}, f, indent=2)
                 except Exception:
                     pass
-                time.sleep(3)
             else:
-                print("[!] Login timed out or pending. You can re-run login anytime.")
+                print("[!] Login timed out or pending.")
 
             context.close()
             return logged_in
@@ -256,19 +287,38 @@ class YouTubeHumanUploader:
             context = self._launch_context(p, headless=headless)
             page = context.new_page()
 
-            # 1. Navigate to YouTube Studio
-            print("[1/7] Navigating to studio.youtube.com...", flush=True)
-            page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="domcontentloaded", timeout=60000)
+            # 1. Navigate to YouTube Studio for the exact channel
+            real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
+            print(f"[1/7] Navigating to studio.youtube.com/channel/{real_ch_id}...", flush=True)
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", wait_until="domcontentloaded", timeout=60000)
             time.sleep(3)
 
-            # Check if login is needed
+            # Check if login or account chooser is needed
             if "accounts.google.com" in page.url or "signin" in page.url:
-                context.close()
-                return {
-                    "success": False,
-                    "error": "login_required",
-                    "message": "YouTube Studio session not logged in. Please run launch_session_login() first."
-                }
+                print("[*] Google account/channel selection screen detected. Attempting auto-selection...", flush=True)
+                time.sleep(2)
+                # Try selecting account
+                acct = page.locator("div[data-email*='sagarsbl369369'], div:has-text('sagarsbl369369@gmail.com'), li:has-text('sagarsbl369369')").first
+                if acct.count() > 0 and acct.is_visible():
+                    print("   -> Auto-selected sagarsbl369369@gmail.com", flush=True)
+                    self._safe_click(page, acct)
+                    time.sleep(3)
+
+                # Try selecting target channel
+                target_ch_name = "Geeta Gyan 60 Sec" if channel_id == "ch_01" else "Geeta Jeevan Sutra"
+                ch_btn = page.locator(f"div:has-text('{target_ch_name}'), tp-yt-paper-item:has-text('{target_ch_name}'), [aria-label*='{target_ch_name}']").first
+                if ch_btn.count() > 0 and ch_btn.is_visible():
+                    print(f"   -> Auto-selected channel: {target_ch_name}", flush=True)
+                    self._safe_click(page, ch_btn)
+                    time.sleep(4)
+
+                if "accounts.google.com" in page.url and ("password" in page.url or "challenge" in page.url):
+                    context.close()
+                    return {
+                        "success": False,
+                        "error": "login_required",
+                        "message": "YouTube Studio session requires interactive credentials. Please run launch_session_login() first."
+                    }
 
             try:
                 page.wait_for_selector("#upload-icon, ytcp-button:has-text('Create'), #create-icon, div#entity-name", timeout=30000)
@@ -449,7 +499,13 @@ class YouTubeHumanUploader:
                 time.sleep(3)
 
             print(f"\n🎉 [SUCCESS] Video upload confirmed as UNLISTED! URL: {video_url or 'Live in Studio'}")
-            time.sleep(5)
+            time.sleep(3)
+
+            # Auto-sweep to ensure no videos remain in Draft
+            try:
+                self.sweep_and_publish_drafts(page, self.channel_id)
+            except Exception as e_sw:
+                print(f"⚠️ Draft sweep note: {e_sw}")
 
             context.close()
             return {
@@ -459,6 +515,54 @@ class YouTubeHumanUploader:
                 "title": title_text,
                 "status": "published_unlisted"
             }
+
+    def sweep_and_publish_drafts(self, page: Page, channel_id: str):
+        """Automatically finds and publishes any stuck draft videos in the channel content tab."""
+        real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
+        print(f"[*] Sweeping YouTube Studio Content tab for any stuck Draft videos...", flush=True)
+        try:
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}/videos", wait_until="domcontentloaded", timeout=45000)
+            time.sleep(4)
+
+            for i in range(5):
+                edit_draft_btn = page.locator("ytcp-button:has-text('Edit draft'), [aria-label*='Edit draft' i]").first
+                if edit_draft_btn.count() == 0 or not edit_draft_btn.is_visible():
+                    print("   ✓ All videos verified! Zero drafts remaining in Studio Content tab.", flush=True)
+                    break
+
+                print(f"   -> Found stuck Draft #{i+1}. Auto-publishing as UNLISTED...", flush=True)
+                self._safe_click(page, edit_draft_btn)
+                time.sleep(3)
+
+                # Advance to Visibility tab
+                vis_btn = page.locator("#step-badge-3, ytcp-stepper-step[step-id='VISIBILITY'], ytcp-stepper-step:has-text('Visibility')").first
+                if vis_btn.count() > 0 and vis_btn.is_visible():
+                    self._safe_click(page, vis_btn)
+                else:
+                    for _ in range(4):
+                        nxt = page.locator("#next-button").first
+                        if nxt.count() > 0 and nxt.is_visible():
+                            self._safe_click(page, nxt)
+                            time.sleep(2)
+
+                time.sleep(1)
+                unlisted = page.locator("tp-yt-paper-radio-button[name='UNLISTED'], [name='UNLISTED'], #unlisted-radio-button").first
+                if unlisted.count() > 0:
+                    self._safe_click(page, unlisted)
+                    time.sleep(1)
+
+                save_btn = page.locator("#done-button, ytcp-button#done-button, ytcp-button:has-text('Save')").first
+                if save_btn.count() > 0 and save_btn.is_visible():
+                    self._safe_click(page, save_btn)
+                    print(f"   🎉 [DRAFT PUBLISHED] Draft #{i+1} converted to Live Unlisted Video!", flush=True)
+                    time.sleep(4)
+
+                close_btn = page.locator("ytcp-video-share-dialog #close-button, ytcp-post-publish-dialog #close-button, #close-button").first
+                if close_btn.count() > 0 and close_btn.is_visible():
+                    self._safe_click(page, close_btn)
+                    time.sleep(2)
+        except Exception as e_draft:
+            print(f"   ⚠️ Draft sweeper encounter: {e_draft}")
 
 human_uploader = YouTubeHumanUploader()
 
