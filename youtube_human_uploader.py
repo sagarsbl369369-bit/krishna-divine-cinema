@@ -327,22 +327,25 @@ class YouTubeHumanUploader:
             time.sleep(2)
 
             # 2. Click Create / Upload
-            print("[2/7] Opening Video Upload Dialog...")
-            create_btn = page.locator("#upload-icon, ytcp-button:has-text('Create'), #create-icon").first
-            if create_btn.count() > 0:
-                create_btn.click()
-                time.sleep(2)
-                upload_item = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('Upload'), #text-item-0").first
-                if upload_item.count() > 0 and upload_item.is_visible():
-                    upload_item.click()
+            print("[2/7] Opening Video Upload Dialog...", flush=True)
+            for _ in range(3):
+                if page.locator("input[type='file']").count() > 0:
+                    break
+                create_btn = page.locator("#create-icon, ytcp-button:has-text('Create'), #upload-icon, #upload-button").first
+                if create_btn.count() > 0:
+                    self._safe_click(page, create_btn)
                     time.sleep(2)
+                    upload_item = page.locator("tp-yt-paper-item:has-text('Upload videos'), tp-yt-paper-item:has-text('Upload'), #text-item-0").first
+                    if upload_item.count() > 0:
+                        self._safe_click(page, upload_item)
+                        time.sleep(3)
 
-            time.sleep(1)
+            time.sleep(2)
 
             # 3. Select Video File
-            print(f"[3/7] Selecting Video File ({os.path.basename(video_path)})...")
+            print(f"[3/7] Selecting Video File ({os.path.basename(video_path)})...", flush=True)
             file_input = page.locator("input[type='file']").first
-            file_input.wait_for(state="attached", timeout=15000)
+            file_input.wait_for(state="attached", timeout=30000)
             file_input.set_input_files(video_path)
 
             print("   [⏳] Waiting for YouTube Studio upload dialog to initialize...")
