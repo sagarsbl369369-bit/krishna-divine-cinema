@@ -289,7 +289,7 @@ def build_chapter_video(chapter: dict, lock_engine: VisualLockEngine, channel_id
 
     bgm_path = soundscape_engine.get_track_for_channel(channel_id, ch_num)
     if not bgm_path or not os.path.exists(bgm_path):
-        bgm_path = r"C:\Users\janar\Downloads\MoneyPrinterTurbo-main\MoneyPrinterTurbo-main\resource\songs\output000.mp3"
+        bgm_path = os.path.join(BASE_DIR, "renders", "drone_432hz.mp3")
     hook_sting = os.path.join(BASE_DIR, "hook_vault", "cinema_hook_sting.wav")
     has_hook = (ch_num == 1) and os.path.exists(hook_sting)
 

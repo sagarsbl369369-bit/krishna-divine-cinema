@@ -25,8 +25,13 @@ RENDERS_DIR = os.path.join(BASE_DIR, "renders")
 SAFE_CEILING_GB = 12.0   # Trigger proactive cleanup
 HARD_FLOOR_GB = 10.0     # Critical ceiling: must never fall below this!
 
-def get_disk_stats(path: str = "C:\\") -> Dict[str, float]:
-    """Returns total, used, and free space in GB for given drive."""
+def get_default_drive() -> str:
+    return "C:\\" if sys.platform == "win32" else "/"
+
+def get_disk_stats(path: str = None) -> Dict[str, float]:
+    """Returns total, used, and free space in GB for given drive (cross-platform)."""
+    if path is None:
+        path = get_default_drive()
     try:
         total, used, free = shutil.disk_usage(path)
         return {
@@ -117,26 +122,27 @@ def purge_stale_caches(verbose: bool = True) -> float:
 def enforce_disk_safety_gate(required_headroom_gb: float = 10.0):
     """
     Safety gate to be called before ANY render or download operation:
-    Ensures that Drive C has at least required_headroom_gb (default 10 GB).
+    Ensures that primary drive has at least required_headroom_gb (default 10 GB).
     If below, proactively purges temp caches. If still below, aborts with exception.
     """
-    stats = get_disk_stats("C:\\")
+    drive_path = get_default_drive()
+    stats = get_disk_stats(drive_path)
     free_gb = stats["free_gb"]
 
     if free_gb < SAFE_CEILING_GB:
         print(f"[⚠️] Storage Sentinel Warning: Free space ({free_gb} GB) is below {SAFE_CEILING_GB} GB. Running proactive cleanup...")
         purge_stale_caches(verbose=True)
-        stats = get_disk_stats("C:\\")
+        stats = get_disk_stats(drive_path)
         free_gb = stats["free_gb"]
 
     if free_gb < required_headroom_gb:
         raise RuntimeError(
-            f"❌ STORAGE SAFETY HALT: Drive C only has {free_gb} GB free. "
+            f"❌ STORAGE SAFETY HALT: Drive {drive_path} only has {free_gb} GB free. "
             f"The minimum hard limit of {required_headroom_gb} GB cannot be guaranteed. "
             f"Operation halted to protect system stability."
         )
 
-    print(f"[🛡️] Storage Sentinel: Verified {free_gb} GB Free (Safe threshold >= {required_headroom_gb} GB)")
+    print(f"[🛡️] Storage Sentinel: Verified {free_gb} GB Free on {drive_path} (Safe threshold >= {required_headroom_gb} GB)")
     return True
 
 if __name__ == "__main__":
