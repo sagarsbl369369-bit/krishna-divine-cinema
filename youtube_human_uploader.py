@@ -39,6 +39,10 @@ SESSION_STATUS_FILE = os.path.join(CREDENTIALS_DIR, "youtube_session_status.json
 os.makedirs(BROWSER_PROFILE_DIR, exist_ok=True)
 
 def get_channel_profile_dir(channel_id: str = "ch_01") -> str:
+    # Priority 1: Cloud unpack directory if set
+    env_prof = os.getenv("CH_PROFILE_DIR")
+    if env_prof and os.path.exists(env_prof) and os.listdir(env_prof):
+        return env_prof
     if channel_id == "ch_02":
         return os.path.join(CREDENTIALS_DIR, "youtube_browser_profile_ch_02")
     return os.path.join(CREDENTIALS_DIR, "youtube_browser_profile")
@@ -77,42 +81,74 @@ class YouTubeHumanUploader:
             "--start-maximized"
         ]
 
-        # 1. Prefer Storage State JSON if available (Ultra-clean for GitHub Actions & Local)
+        # 1. Prefer Persistent Profile Directory if populated (Ultra-reliable Chrome Session)
+        has_profile_data = os.path.exists(self.profile_dir) and any(os.scandir(self.profile_dir))
+        if has_profile_data:
+            print(f"[*] Authenticating with Persistent Chrome Profile: {self.profile_dir}")
+            try:
+                ctx = p.chromium.launch_persistent_context(
+                    user_data_dir=self.profile_dir,
+                    headless=headless,
+                    channel="chrome",
+                    args=launch_args,
+                    viewport={"width": 1920, "height": 1080}
+                )
+                self._inject_stealth(ctx)
+                return ctx
+            except Exception as e_prof:
+                print(f"[ℹ️] Chrome channel fallback ({e_prof}). Launching Chromium context...")
+                self.clean_stale_locks()
+                try:
+                    ctx = p.chromium.launch_persistent_context(
+                        user_data_dir=self.profile_dir,
+                        headless=headless,
+                        args=launch_args,
+                        viewport={"width": 1920, "height": 1080}
+                    )
+                    self._inject_stealth(ctx)
+                    return ctx
+                except Exception as e_fallback:
+                    print(f"[!] Persistent launch error: {e_fallback}. Falling back to storage state...")
+
+        # 2. Fallback to Storage State JSON if available
         state_candidates = [
             os.path.join(CREDENTIALS_DIR, f"storage_state_{self.channel_id}.json"),
             os.path.join(CREDENTIALS_DIR, f"{self.channel_id}_storage_state.json")
         ]
         active_state = next((s for s in state_candidates if os.path.exists(s) and os.path.getsize(s) > 1000), None)
-        if active_state and headless:
+        if active_state:
             print(f"[*] Authenticating with Playwright Storage State: {active_state}")
             try:
+                browser = p.chromium.launch(headless=headless, channel="chrome", args=launch_args)
+            except Exception:
                 browser = p.chromium.launch(headless=headless, args=launch_args)
-                return browser.new_context(
-                    storage_state=active_state,
-                    viewport={"width": 1920, "height": 1080},
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-                )
-            except Exception as e_state:
-                print(f"[!] Storage state launch error: {e_state}. Falling back to persistent profile...")
+            ctx = browser.new_context(
+                storage_state=active_state,
+                viewport={"width": 1920, "height": 1080},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            )
+            self._inject_stealth(ctx)
+            return ctx
 
-        # 2. Fallback to Persistent User Profile Directory
+        # 3. Default clean context
+        return p.chromium.launch_persistent_context(
+            user_data_dir=self.profile_dir,
+            headless=headless,
+            args=launch_args,
+            viewport={"width": 1920, "height": 1080}
+        )
+
+    def _inject_stealth(self, context):
+        """Injects anti-detection stealth scripts into browser context."""
         try:
-            return p.chromium.launch_persistent_context(
-                user_data_dir=self.profile_dir,
-                headless=headless,
-                channel="chrome",
-                args=launch_args,
-                viewport=None
-            )
-        except Exception as e:
-            print(f"[ℹ️] Chrome channel fallback ({e}). Launching dedicated Chromium...")
-            self.clean_stale_locks()
-            return p.chromium.launch_persistent_context(
-                user_data_dir=self.profile_dir,
-                headless=headless,
-                args=launch_args,
-                viewport=None
-            )
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+                window.navigator.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en', 'hi']});
+            """)
+        except Exception:
+            pass
 
     def is_logged_in(self, page: Optional[Page] = None) -> bool:
         """Checks if current browser session is logged into YouTube Studio."""
@@ -132,15 +168,31 @@ class YouTubeHumanUploader:
             return False
 
     def _check_page_logged_in(self, page: Page) -> bool:
+        real_ch_id = "UCw-3CNwReOnBF7__N6S4DQw" if self.channel_id == "ch_01" else "UClptLNgnB7fxcmmgzuTXwvA"
         try:
-            page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="domcontentloaded", timeout=45000)
-            for _ in range(5):
+            page.goto(f"https://studio.youtube.com/channel/{real_ch_id}?approve_browser_access=true", wait_until="domcontentloaded", timeout=45000)
+            for _ in range(8):
                 time.sleep(2)
                 current_url = page.url
-                if "accounts.google.com" in current_url or "signin" in current_url:
-                    return False
-                if "studio.youtube.com" in current_url:
-                    if "Creator Studio" in page.title() or "channel" in current_url:
+                
+                # Auto-confirm account or channel selection if Google shows chooser
+                if "accounts.google.com" in current_url:
+                    acct = page.locator("div[data-email*='sagarsbl369369'], div:has-text('sagarsbl369369@gmail.com')").first
+                    if acct.count() > 0 and acct.is_visible():
+                        self._safe_click(page, acct)
+                        time.sleep(2)
+                    next_btn = page.locator("button:has-text('Next'), div[role='button']:has-text('Next')").first
+                    if next_btn.count() > 0 and next_btn.is_visible():
+                        self._safe_click(page, next_btn)
+                        time.sleep(3)
+                    target_ch_name = "Geeta Gyan 60 Sec" if self.channel_id == "ch_01" else "Geeta Jeevan Sutra"
+                    ch_btn = page.locator(f"div:has-text('{target_ch_name}'), tp-yt-paper-item:has-text('{target_ch_name}')").first
+                    if ch_btn.count() > 0 and ch_btn.is_visible():
+                        self._safe_click(page, ch_btn)
+                        time.sleep(3)
+
+                if "studio.youtube.com" in page.url:
+                    if "Creator Studio" in page.title() or "channel" in page.url:
                         return True
                     if page.locator("#create-icon, #upload-button, ytcp-button#create-icon, #channel-name, div#entity-name").count() > 0:
                         return True

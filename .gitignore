@@ -24,8 +24,9 @@ renders/
 *.log
 *.jsonl
 
-# Local sensitive credentials & secrets (NEVER COMMIT)
-credentials/
+# Local sensitive credentials & secrets (NEVER COMMIT PLAINTEXT)
+credentials/*
+!credentials/*.enc
 config.json
 channels.json
 chrome_dbg/

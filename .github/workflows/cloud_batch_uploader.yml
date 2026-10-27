@@ -6,7 +6,7 @@ on:
       run_id:
         description: 'Source GitHub Run ID containing rendered video artifacts'
         required: true
-        default: '40484694835'
+        default: '40514508384'
 
 jobs:
   cloud_upload:
@@ -24,27 +24,41 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: 🎬 Install FFmpeg & Indian Devanagari Fonts
+      - name: 🎬 Install FFmpeg, Xvfb & Indian Devanagari Fonts
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fonts-noto-hinted fonts-deva
+          sudo apt-get install -y -qq ffmpeg xvfb fonts-noto-hinted fonts-deva
 
       - name: 📦 Install Python Dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install playwright requests
+          pip install playwright requests cryptography
 
-      - name: 🌐 Install Playwright & Headless Chromium
+      - name: 🌐 Install Playwright & Real Google Chrome
         run: |
-          playwright install chromium --with-deps
+          playwright install chrome --with-deps || playwright install chromium --with-deps
+
+      - name: 🔐 Decrypt & Unpack Authenticated Channel Profiles
+        env:
+          MASTER_KEY: ${{ secrets.CH_PROFILE_SECRET_KEY }}
+        run: |
+          mkdir -p /tmp/chrome_user_data_ch01 /tmp/chrome_user_data_ch02
+          if [ -f "credentials/profile_ch_01.tar.gz.enc" ] && [ -n "$MASTER_KEY" ]; then
+            python decrypt_profile.py "$MASTER_KEY" "credentials/profile_ch_01.tar.gz.enc" /tmp/p1.tar.gz
+            tar -xzf /tmp/p1.tar.gz -C /tmp/chrome_user_data_ch01
+            echo "✓ CH01 Profile Unpacked"
+          fi
+          if [ -f "credentials/profile_ch_02.tar.gz.enc" ] && [ -n "$MASTER_KEY" ]; then
+            python decrypt_profile.py "$MASTER_KEY" "credentials/profile_ch_02.tar.gz.enc" /tmp/p2.tar.gz
+            tar -xzf /tmp/p2.tar.gz -C /tmp/chrome_user_data_ch02
+            echo "✓ CH02 Profile Unpacked"
+          fi
 
       - name: 🚀 Execute Cloud Batch Uploader to YouTube Studio
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          YT_STORAGE_STATE_CH01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
-          YT_STORAGE_STATE_CH_01: ${{ secrets.YT_STORAGE_STATE_CH01 }}
-          YT_STORAGE_STATE_CH02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
-          YT_STORAGE_STATE_CH_02: ${{ secrets.YT_STORAGE_STATE_CH02 }}
+          CH_PROFILE_DIR_CH01: /tmp/chrome_user_data_ch01
+          CH_PROFILE_DIR_CH02: /tmp/chrome_user_data_ch02
         run: |
-          python cloud_batch_uploader.py ${{ github.event.inputs.run_id || '40484694835' }}
+          xvfb-run -a -s "-screen 0 1920x1080x24" python cloud_batch_uploader.py ${{ github.event.inputs.run_id || '40514508384' }}

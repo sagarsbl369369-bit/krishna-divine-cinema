@@ -54,9 +54,9 @@ def run_cloud_batch(github_token: str = None, run_id: str = "40484694835"):
     print("🧹 [PHASE 1] SWEEPING CHANNEL 1 DRAFTS IN YOUTUBE STUDIO")
     print("=" * 80)
     try:
-        uploader_ch1 = YouTubeHumanUploader(channel_id="ch_01")
+        uploader_ch1 = YouTubeHumanUploader(channel_id="ch_01", profile_dir=os.getenv("CH_PROFILE_DIR_CH01"))
         with sync_playwright() as p:
-            ctx = uploader_ch1._launch_context(p, headless=True)
+            ctx = uploader_ch1._launch_context(p, headless=False)
             pg = ctx.new_page()
             uploader_ch1.sweep_and_publish_drafts(pg, "ch_01")
             ctx.close()
@@ -128,14 +128,15 @@ def run_cloud_batch(github_token: str = None, run_id: str = "40484694835"):
                             }
 
                         print(f"   🚀 Uploading {os.path.basename(v_file)} to {ch_name} as UNLISTED...")
-                        uploader = YouTubeHumanUploader(channel_id=target_ch)
+                        p_dir = os.getenv("CH_PROFILE_DIR_CH01") if target_ch == "ch_01" else os.getenv("CH_PROFILE_DIR_CH02")
+                        uploader = YouTubeHumanUploader(channel_id=target_ch, profile_dir=p_dir)
                         res = uploader.upload_video(
                             video_path=v_file,
                             seo_package=seo_data,
                             thumbnail_path=t_file,
                             channel_id=target_ch,
                             privacy="unlisted",
-                            headless=True
+                            headless=False
                         )
                         print(f"   🎉 Upload Result: {res.get('video_url', 'Success')}")
                         time.sleep(10)

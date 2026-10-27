@@ -51,25 +51,43 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: 🎬 Install FFmpeg & Indian Devanagari Fonts
+      - name: 🎬 Install FFmpeg, Xvfb & Indian Devanagari Fonts
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fonts-noto-hinted fonts-deva
+          sudo apt-get install -y -qq ffmpeg xvfb fonts-noto-hinted fonts-deva
 
       - name: 📦 Install Python Dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install edge-tts pydub gtts
+          pip install edge-tts pydub gtts playwright cryptography
 
-      - name: 🌐 Install Playwright & Headless Chromium
+      - name: 🌐 Install Playwright & Real Google Chrome
         run: |
-          pip install playwright
-          playwright install chromium --with-deps
+          playwright install chrome --with-deps || playwright install chromium --with-deps
+
+      - name: 🔐 Decrypt & Unpack Authenticated Channel Profile
+        env:
+          WORKER_ID: ${{ matrix.worker_id }}
+          MASTER_KEY: ${{ secrets.CH_PROFILE_SECRET_KEY }}
+        run: |
+          mkdir -p /tmp/chrome_user_data
+          TARGET_ENC="credentials/profile_ch_01.tar.gz.enc"
+          if [ "${{ matrix.worker_id }}" -gt 5 ]; then
+            TARGET_ENC="credentials/profile_ch_02.tar.gz.enc"
+          fi
+          if [ -f "$TARGET_ENC" ] && [ -n "$MASTER_KEY" ]; then
+            python decrypt_profile.py "$MASTER_KEY" "$TARGET_ENC" /tmp/profile.tar.gz
+            tar -xzf /tmp/profile.tar.gz -C /tmp/chrome_user_data
+            echo "✓ Successfully unpacked authenticated profile for Worker ${{ matrix.worker_id }}"
+          else
+            echo "⚠️ Warning: Encrypted profile or secret key missing; fallback active."
+          fi
 
       - name: ⚡ Run Autonomous Video Worker ${{ matrix.worker_id }}
         env:
           WORKER_ID: ${{ matrix.worker_id }}
+          CH_PROFILE_DIR: /tmp/chrome_user_data
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -85,7 +103,7 @@ jobs:
           DURATION: ${{ github.event.inputs.target_duration || '35' }}
           RESEARCH_MINS: ${{ github.event.inputs.research_mins || '15.0' }}
         run: |
-          python github_worker_node.py --worker_id ${{ matrix.worker_id }} --duration ${{ github.event.inputs.target_duration || '35' }} --privacy ${{ github.event.inputs.privacy || 'unlisted' }} --research_mins ${{ github.event.inputs.research_mins || '15.0' }}
+          xvfb-run -a -s "-screen 0 1920x1080x24" python github_worker_node.py --worker_id ${{ matrix.worker_id }} --duration ${{ github.event.inputs.target_duration || '35' }} --privacy ${{ github.event.inputs.privacy || 'unlisted' }} --research_mins ${{ github.event.inputs.research_mins || '15.0' }}
 
       - name: 💾 Preserve Rendered Video & SEO Package as Artifact
         if: always()
