@@ -234,8 +234,9 @@ class YouTubeHumanUploader:
             page = context.new_page()
 
             # 1. Navigate to YouTube Studio
-            print("[1/7] Navigating to studio.youtube.com...")
-            page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="networkidle", timeout=45000)
+            print("[1/7] Navigating to studio.youtube.com...", flush=True)
+            page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_selector("#upload-icon, ytcp-button:has-text('Create'), #create-icon, div#entity-name", timeout=30000)
             time.sleep(3)
 
             # Check if login is needed
@@ -327,27 +328,41 @@ class YouTubeHumanUploader:
             except Exception:
                 pass
 
-            # 7. Navigation: Next -> Next -> Next -> Visibility Step
+            # 7. Navigation to Visibility Step
             print("[7/7] Navigating to Visibility & Publishing...", flush=True)
-            next_btn = page.locator("#next-button").first
-            for step in range(3):
-                if next_btn.is_visible() and next_btn.is_enabled():
+            for attempt in range(8):
+                # Check if Visibility tab is already reached
+                unlisted_radio = page.locator("tp-yt-paper-radio-button[name='UNLISTED'], [name='UNLISTED'], #unlisted-radio-button").first
+                if unlisted_radio.count() > 0 and unlisted_radio.is_visible():
+                    print("   ✓ Arrived at Visibility Tab!", flush=True)
+                    break
+
+                # Try clicking Visibility tab directly in the stepper header
+                vis_badge = page.locator("#step-badge-3, ytcp-stepper-step[step-id='VISIBILITY'], ytcp-stepper-step:has-text('Visibility')").first
+                if vis_badge.count() > 0 and vis_badge.is_visible():
+                    self._safe_click(page, vis_badge)
+                    time.sleep(2)
+                    continue
+
+                # Otherwise click Next
+                next_btn = page.locator("#next-button").first
+                if next_btn.count() > 0 and next_btn.is_visible():
                     self._safe_click(page, next_btn)
                     time.sleep(2)
+                else:
+                    time.sleep(2)
 
-            # Ensure we are on the Visibility tab
-            page.wait_for_selector("tp-yt-paper-radio-button[name='UNLISTED'], #unlisted-radio-button, tp-yt-paper-radio-button[name='PUBLIC']", timeout=20000)
-            time.sleep(1)
+            time.sleep(2)
 
             # Visibility Selection: Explicitly click and verify radio state
             if privacy.lower() == "public":
-                pub_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC'], #public-radio-button").first
+                pub_radio = page.locator("tp-yt-paper-radio-button[name='PUBLIC'], [name='PUBLIC'], #public-radio-button").first
                 if pub_radio.count() > 0:
                     self._safe_click(page, pub_radio)
                     time.sleep(1)
                     print("   ✓ Visibility Confirmed: PUBLIC", flush=True)
             else:
-                unlisted_radio = page.locator("tp-yt-paper-radio-button[name='UNLISTED'], #unlisted-radio-button").first
+                unlisted_radio = page.locator("tp-yt-paper-radio-button[name='UNLISTED'], [name='UNLISTED'], #unlisted-radio-button").first
                 if unlisted_radio.count() > 0:
                     self._safe_click(page, unlisted_radio)
                     time.sleep(1)
@@ -363,11 +378,12 @@ class YouTubeHumanUploader:
                 pass
 
             # Final Save / Publish click (MUST NOT click close-button prematurely!)
-            done_btn = page.locator("#done-button, ytcp-button#done-button").first
-            page.wait_for_selector("#done-button:not([disabled])", timeout=30000)
-            self._safe_click(page, done_btn)
-            print("🎉 [PUBLISH TRIGGERED] Clicked Publish/Save in YouTube Studio!", flush=True)
-            time.sleep(5)
+            time.sleep(2)
+            done_btn = page.locator("#done-button, ytcp-button#done-button, ytcp-button:has-text('Save'), ytcp-button:has-text('Publish')").first
+            if done_btn.count() > 0 and done_btn.is_visible():
+                self._safe_click(page, done_btn)
+                print("🎉 [PUBLISH TRIGGERED] Clicked Publish/Save in YouTube Studio!", flush=True)
+                time.sleep(5)
 
             # Wait for the post-publish confirmation modal (e.g., 'Video published' / 'Video processing' share dialog)
             print("   [⏳] Waiting for YouTube Studio post-publish finalization dialog...", flush=True)
