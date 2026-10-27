@@ -247,8 +247,12 @@ def build_chapter_video(chapter: dict, lock_engine: VisualLockEngine, channel_id
 
     # 3. Sourcing Voice-Accurate Clips with Strict Visual Lock
     print(f"   [3/4] Sourcing 100% Unique Devotional Clips...")
-    queries = chapter.get("visual_queries", ["temple", "meditation"])
-    num_clips = max(len(queries), int(duration // 8))
+    queries = chapter.get("visual_queries", ["dark starry night", "deep ocean", "meditation"])
+    if ch_num == 1:
+        # Pacing Hard-Lock: Opening 5-Minute Hook MUST have hyper-dynamic visual pacing (every 4.0 - 4.5s cut)
+        num_clips = max(len(queries), int(duration // 4.5))
+    else:
+        num_clips = max(len(queries), int(duration // 7.0))
     clip_target_dur = duration / num_clips
 
     normalized_clips = []
