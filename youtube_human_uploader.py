@@ -133,14 +133,17 @@ class YouTubeHumanUploader:
 
     def _check_page_logged_in(self, page: Page) -> bool:
         try:
-            page.goto("https://studio.youtube.com", wait_until="domcontentloaded", timeout=30000)
-            time.sleep(3)
-            current_url = page.url
-            if "accounts.google.com" in current_url or "signin" in current_url:
-                return False
-            if "studio.youtube.com" in current_url:
-                if "Creator Studio" in page.title() or "channel" in current_url or page.locator("#create-icon, #upload-button, ytcp-button#create-icon, #channel-name").count() > 0:
-                    return True
+            page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="domcontentloaded", timeout=45000)
+            for _ in range(5):
+                time.sleep(2)
+                current_url = page.url
+                if "accounts.google.com" in current_url or "signin" in current_url:
+                    return False
+                if "studio.youtube.com" in current_url:
+                    if "Creator Studio" in page.title() or "channel" in current_url:
+                        return True
+                    if page.locator("#create-icon, #upload-button, ytcp-button#create-icon, #channel-name, div#entity-name").count() > 0:
+                        return True
             return False
         except Exception:
             return False
@@ -256,7 +259,6 @@ class YouTubeHumanUploader:
             # 1. Navigate to YouTube Studio
             print("[1/7] Navigating to studio.youtube.com...", flush=True)
             page.goto("https://studio.youtube.com/?approve_browser_access=true", wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_selector("#upload-icon, ytcp-button:has-text('Create'), #create-icon, div#entity-name", timeout=30000)
             time.sleep(3)
 
             # Check if login is needed
@@ -267,6 +269,12 @@ class YouTubeHumanUploader:
                     "error": "login_required",
                     "message": "YouTube Studio session not logged in. Please run launch_session_login() first."
                 }
+
+            try:
+                page.wait_for_selector("#upload-icon, ytcp-button:has-text('Create'), #create-icon, div#entity-name", timeout=30000)
+            except Exception:
+                pass
+            time.sleep(2)
 
             # 2. Click Create / Upload
             print("[2/7] Opening Video Upload Dialog...")
