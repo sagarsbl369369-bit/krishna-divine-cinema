@@ -1,5 +1,8 @@
 name: 10-Video Parallel Autonomous Cloud Engine (Zero-PC)
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -95,6 +98,14 @@ jobs:
             renders/seo_packages/*
             renders/*upload_manifest.json
           retention-days: 7
+
+      - name: 💓 Lifetime Autopilot Keep-Alive Pulse (Prevents 60-Day Inactivity Pause)
+        if: matrix.worker_id == 1 && always()
+        run: |
+          git config --global user.name "Krishna Autopilot Engine"
+          git config --global user.email "autopilot@krishnavandan.ai"
+          git commit --allow-empty -m "chore(heartbeat): daily lifetime pulse $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+          git push origin main || true
 
       - name: 🛑 Graceful Container Shutdown
         if: always()
