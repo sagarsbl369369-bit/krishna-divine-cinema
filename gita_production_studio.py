@@ -45,8 +45,8 @@ def menu():
         print(" [4] 🎬 UPLOAD ONLY -> Channel 2 (Geeta Jeevan Sutra - 5 Videos)")
         print(" [5] 📁 OPEN VAULT FOLDER in Windows Explorer")
         print(" [6] 🌐 OPEN VISUAL CATALOG (catalog.html in Web Browser)")
-        print(" [7] ⚡ DISPATCH NEXT CLOUD BATCH (Generate 10 Fresh Videos in Cloud)")
-        print(" [8] 🧹 SWEEP CHANNEL DRAFTS (Convert Stuck Drafts to UNLISTED)")
+        print(" [7] ⚡ DISPATCH 10-VIDEO CLOUD BEAST (10 Parallel GitHub Actions Runners)")
+        print(" [8] 🔑 INJECT & SYNC GOOGLE AI STUDIO API KEYS (Multi-Account Pool)")
         print(" [9] ❌ EXIT")
         print("=" * 82)
         
@@ -97,23 +97,23 @@ def menu():
             time.sleep(1)
 
         elif choice == "7":
-            print("[*] Triggering next 10-video batch on GitHub Actions runner...")
-            try:
-                import trigger_cloud_batch
-                trigger_cloud_batch.trigger_batch("40514508384")
-            except Exception as e:
-                print(f"Error: {e}")
+            import master_cloud_10_orchestrator; master_cloud_10_orchestrator.run_10_video_pipeline()
+            pass
+
+
+
+
             input("\nPress Enter to return to menu...")
 
         elif choice == "8":
-            print("[*] Sweeping Channel 1 drafts...")
-            try:
-                from youtube_human_uploader import YouTubeHumanUploader
-                u = YouTubeHumanUploader("ch_01")
-                # standalone sweep
-                print("Drafts swept!")
-            except Exception as e:
-                print(f"Error: {e}")
+            import inject_google_ai_keys; inject_google_ai_keys.interactive_injection()
+            pass
+
+
+
+
+
+
             input("\nPress Enter to return to menu...")
 
         elif choice == "9":
