@@ -13,16 +13,14 @@ if sys.platform == "win32":
         pass
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MASTER_OUTRO_PATH = os.path.join(BASE_DIR, "assets", "outro", "master_shield_outro_1080p.mp4")
-STD_OUTRO_PATH = os.path.join(BASE_DIR, "assets", "outro", "standard_1080p_outro.mp4")
-RAW_OUTRO_PATH = os.path.join(BASE_DIR, "assets", "outro", "norm_content_id_outro.mp4")
+ORIGINAL_DOWNLOADS_OUTRO = r"C:\Users\janar\Downloads\content_id_outro.mp4"
+LOCAL_OUTRO = os.path.join(BASE_DIR, "assets", "outro", "norm_content_id_outro.mp4")
 
-if os.path.exists(MASTER_OUTRO_PATH):
-    OUTRO_PATH = MASTER_OUTRO_PATH
-elif os.path.exists(STD_OUTRO_PATH):
-    OUTRO_PATH = STD_OUTRO_PATH
+# Prefer pristine 1080p original outro with original song HU-BA-HU
+if os.path.exists(ORIGINAL_DOWNLOADS_OUTRO):
+    OUTRO_PATH = ORIGINAL_DOWNLOADS_OUTRO
 else:
-    OUTRO_PATH = RAW_OUTRO_PATH
+    OUTRO_PATH = LOCAL_OUTRO
 
 SCENES_DIR = os.path.join(BASE_DIR, "renders", "assets")
 TARGET_BASE_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "geeta wala")
@@ -53,7 +51,7 @@ def assemble_hypnotic_video(audio_path: str, title: str, channel_key: str = "ch_
     ch_folder = "Channel_01_GeetaGyan60Sec" if channel_key == "ch_01" else "Channel_02_GeetaJeevanSutra"
     ch_name = "Geeta Gyan 60 Sec" if channel_key == "ch_01" else "Geeta Jeevan Sutra"
     
-    clean_slug = "".join([c if c.isalnum() else "_" for c in title[:30]]).strip("_")
+    clean_slug = "".join([c if (c.isascii() and c.isalnum()) else "_" for c in title[:30]]).strip("_") or f"Ep_{int(time.time())%10000}"
     timestamp_id = int(time.time())
     dest_folder = os.path.join(TARGET_BASE_DIR, ch_folder, f"Hypnotic_{timestamp_id}_{clean_slug}")
     os.makedirs(dest_folder, exist_ok=True)
@@ -86,8 +84,8 @@ def assemble_hypnotic_video(audio_path: str, title: str, channel_key: str = "ch_
         print(f"[*] Hard-stitching 173.25s Blue Laser Shield Outro ({os.path.basename(OUTRO_PATH)})...")
         filter_complex = (
             "[0:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,fps=30,format=yuv420p[v0];"
-            "[1:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.4[a0];"
-            "[2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.4[a1];"
+            "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[a0];"
+            "[2:a]aformat=sample_rates=48000:channel_layouts=stereo[a1];"
             "[v0][a0][2:v][a1]concat=n=2:v=1:a=1[v][a]"
         )
         cmd = [
